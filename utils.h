@@ -375,6 +375,7 @@ namespace utils {
     }
 #endif
 
+#ifdef KEYBOARD_SUPPORT
 #define isKeyDown(vKey) ((GetAsyncKeyState(vKey) & 0x8000) ? 1:0)
 
     constexpr auto KEY_COUNT = 256;
@@ -646,5 +647,5 @@ namespace utils {
     inline void recordKeyboard() {
         recordKeyboard(GetExeFileNameWithoutExtension() + _T(".txt"), 1500, 10);
     }
+#endif
 }
-
