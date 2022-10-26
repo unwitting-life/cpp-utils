@@ -95,18 +95,39 @@ namespace utils {
         return s;
     }
 
+#ifndef SPRINTF_BUFFER_SIZE
+#define SPRINTF_BUFFER_SIZE 8192
+#endif
+
     string_t sprintf(string_t format, ...) {
         string_t s;
-        TCHAR buffer[8192] = { 0 };
-        va_list args;
-        va_start(args, format);
-        _vsntprintf_s(buffer, _countof(buffer) - 1, format.c_str(), args);
-        va_end(args);
-        s = buffer;
+        auto p = new TCHAR[SPRINTF_BUFFER_SIZE];
+        if (p) {
+            va_list args;
+            va_start(args, format);
+            _vsntprintf_s(p, SPRINTF_BUFFER_SIZE - 1, SPRINTF_BUFFER_SIZE - 1, format.c_str(), args);
+            va_end(args);
+            s = p;
+            delete[] p;
+            p = nullptr;
+        }
         return s;
     }
 
-#ifdef WIN32
+    std::string itoa16(int i) {
+        std::string s;
+        char hex[100] = { 0 };
+        _itoa_s(i, hex, 16);
+        return hex;
+    }
+
+    string_t upper(string_t s) {
+        string_t copy = s;
+        std::transform(copy.begin(), copy.end(), copy.begin(), ::toupper);
+        return copy;
+    }
+
+#ifdef _MSC_VER
     void writeLog(string_t);
 
     std::string w2s(const std::wstring& ws) {
@@ -123,67 +144,41 @@ namespace utils {
         return result;
     }
 
-    inline BOOL hash(BYTE* pData, DWORD dwDataLength, ALG_ID algHashType, BYTE** ppHashData, DWORD* pdwHashDataLength) {
+#ifdef UNICODE
+#define _s2w s2w
+#else
+#define _s2w(x) (x)
+#endif
+
+    inline string_t hash(BYTE* pData, DWORD dwDataLength, ALG_ID algHashType = CALG_MD5) {
+        string_t hash_;
         HCRYPTPROV hCryptProv = NULL;
         HCRYPTHASH hCryptHash = NULL;
-        BYTE* pHashData = NULL;
         DWORD dwHashDataLength = 0;
-        DWORD dwTemp = 0;
-        BOOL bRet = FALSE;
-
-        do {
-            bRet = ::CryptAcquireContext(&hCryptProv, NULL, NULL, PROV_RSA_AES, CRYPT_VERIFYCONTEXT);
-            if (FALSE == bRet) {
-                break;
-            }
-
-            bRet = ::CryptCreateHash(hCryptProv, algHashType, NULL, NULL, &hCryptHash);
-            if (FALSE == bRet) {
-                break;
-            }
-
-            bRet = ::CryptHashData(hCryptHash, pData, dwDataLength, 0);
-            if (FALSE == bRet) {
-                break;
-            }
-
-            dwTemp = sizeof(dwHashDataLength);
-            bRet = ::CryptGetHashParam(hCryptHash, HP_HASHSIZE, (BYTE*)(&dwHashDataLength), &dwTemp, 0);
-            if (FALSE == bRet) {
-                break;
-            }
-
-            pHashData = new BYTE[dwHashDataLength];
-            if (NULL == pHashData) {
-                bRet = FALSE;
-                break;
-            }
-            ::RtlZeroMemory(pHashData, dwHashDataLength);
-
-            bRet = ::CryptGetHashParam(hCryptHash, HP_HASHVAL, pHashData, &dwHashDataLength, 0);
-            if (FALSE == bRet) {
-                break;
-            }
-
-            *ppHashData = pHashData;
-            *pdwHashDataLength = dwHashDataLength;
-
-        } while (FALSE);
-
-        if (FALSE == bRet) {
-            if (pHashData) {
-                delete[]pHashData;
-                pHashData = NULL;
+        DWORD dwTemp = sizeof(dwHashDataLength);
+        if (CryptAcquireContext(&hCryptProv, NULL, NULL, PROV_RSA_AES, CRYPT_VERIFYCONTEXT) &&
+            CryptCreateHash(hCryptProv, algHashType, NULL, NULL, &hCryptHash) &&
+            CryptHashData(hCryptHash, pData, dwDataLength, 0) &&
+            CryptGetHashParam(hCryptHash, HP_HASHSIZE, (BYTE*)(&dwHashDataLength), &dwTemp, 0)) {
+            auto p = new BYTE[dwHashDataLength + 1];
+            if (p) {
+                RtlZeroMemory(p, dwHashDataLength + 1);
+                if (CryptGetHashParam(hCryptHash, HP_HASHVAL, p, &dwHashDataLength, 0)) {
+                    for (DWORD i = 0; i < dwHashDataLength; i++) {
+                        hash_ += utils::upper(_s2w(utils::itoa16(p[i])));
+                    }
+                }
+                delete[] p;
+                p = nullptr;
             }
         }
         if (hCryptHash) {
-            ::CryptDestroyHash(hCryptHash);
+            CryptDestroyHash(hCryptHash);
         }
         if (hCryptProv) {
-            ::CryptReleaseContext(hCryptProv, 0);
+            CryptReleaseContext(hCryptProv, 0);
         }
-
-        return bRet;
+        return hash_;
     }
 
     inline string_t GetFileName(string_t path) {
@@ -208,9 +203,9 @@ namespace utils {
         string_t::size_type tmp_pos_begin = 0;
         string_t::size_type tmp_pos = 0;
         if (path.find(UNC) == 0) {
-            tmp_pos = path.find('\\', _tcslen(UNC));
+            tmp_pos = path.find(_T('\\'), _tcslen(UNC));
         } else {
-            tmp_pos = path.find('\\', tmp_pos_begin);
+            tmp_pos = path.find(_T('\\'), tmp_pos_begin);
         }
         while (tmp_pos != path.npos) {
             string_t tmpdir = path.substr(0, tmp_pos);
@@ -221,7 +216,7 @@ namespace utils {
                 ::CreateDirectory(tmpdir.c_str(), nullptr);
             }
             tmp_pos_begin = tmp_pos + 1;
-            tmp_pos = path.find('\\', tmp_pos_begin);
+            tmp_pos = path.find(_T('\\'), tmp_pos_begin);
         }
         if (!PathFileExists(path.c_str())) {
             ::CreateDirectory(path.c_str(), nullptr);
