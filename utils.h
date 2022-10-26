@@ -10,6 +10,10 @@
 #include <cstdio>
 #include <cstring>
 
+#ifdef BASE64_SUPPORT
+#include "base64/base64.hpp"
+#endif
+
 #ifdef CPPHTTPLIB_HTTPLIB_SUPPORT
 #define CPPHTTPLIB_OPENSSL_SUPPORT
 #include "cpp-httplib/v0.11.2+/httplib.h"
