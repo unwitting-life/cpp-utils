@@ -1,10 +1,29 @@
 ﻿#pragma once
-#include <string>
-#include <vector>
-
-#ifdef WIN32
+#ifdef _MSC_VER
 #define _WINSOCKAPI_    // stops windows.h including winsock.h
 #include <windows.h>
+#endif
+
+#include <string>
+#include <vector>
+#include <iostream>
+#include <cstdio>
+#include <cstring>
+
+#ifdef CPPHTTPLIB_HTTPLIB_SUPPORT
+#define CPPHTTPLIB_OPENSSL_SUPPORT
+#include "cpp-httplib/v0.11.2+/httplib.h"
+
+#ifdef _MSC_VER
+#ifdef _WIN64
+#pragma comment(lib, __FILE__ "/../OpenSSL/3.0.6+/VC-WIN64A/lib/libcrypto.lib")
+#pragma comment(lib, __FILE__ "/../OpenSSL/3.0.6+/VC-WIN64A/lib/libssl.lib")
+#endif
+
+#endif
+#endif
+
+#ifdef _MSC_VER
 #include <iostream>
 #include <stdio.h>
 #include <conio.h>
