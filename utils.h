@@ -9,6 +9,7 @@
 #include <iostream>
 #include <cstdio>
 #include <cstring>
+#include <filesystem>
 
 #ifdef BASE64_SUPPORT
 #include "base64/base64.hpp"
@@ -130,19 +131,19 @@ namespace utils {
 #ifdef _MSC_VER
             if (p) {
 #endif
-                va_list args;
-                va_start(args, format);
+            va_list args;
+            va_start(args, format);
 #ifdef _MSC_VER
-                _vsntprintf_s(p, SPRINTF_BUFFER_SIZE - 1, SPRINTF_BUFFER_SIZE - 1, format.c_str(), args);
+            _vsntprintf_s(p, SPRINTF_BUFFER_SIZE - 1, SPRINTF_BUFFER_SIZE - 1, format.c_str(), args);
 #else
-                vsnprintf(p, SPRINTF_BUFFER_SIZE - 1, format.c_str(), args);
+            vsnprintf(p, SPRINTF_BUFFER_SIZE - 1, format.c_str(), args);
 #endif
-                va_end(args);
-                s = p;
-                delete[] p;
+            va_end(args);
+            s = p;
+            delete[] p;
 #ifdef _MSC_VER
-                p = nullptr;
-            }
+            p = nullptr;
+        }
 #endif
             return s;
         }
@@ -174,28 +175,38 @@ namespace utils {
             return s.find(find) == 0;
         }
 
-        string_t find(string_t s, string_t prefix, string_t suffix) {
-            string_t find_;
+        std::vector<string_t> findAll(string_t s, string_t prefix, string_t suffix) {
+            std::vector<string_t> find_;
             auto prefix_ = s.find(prefix);
-            if (prefix_ != std::string::npos) {
+            while (prefix_ != std::string::npos) {
                 auto suffix_ = suffix.empty() ? std::string::npos : s.find(suffix, prefix_ + prefix.size());
                 if (suffix_ == std::string::npos) {
-                    find_ = s.substr(prefix_);
+                    find_.push_back(s.substr(prefix_));
                 } else {
-                    find_ = s.substr(prefix_, suffix_ - prefix_ - suffix.size() + 1);
+                    find_.push_back(s.substr(prefix_, suffix_ - prefix_ - suffix.size() + 1));
+                    prefix_ = s.find(prefix, suffix_ + suffix.size());
                 }
             }
             return find_;
         }
 
+        string_t find(string_t s, string_t prefix, string_t suffix) {
+            auto find_ = findAll(s, prefix, suffix);
+            return find_.empty() ? string_t() : find_.at(0);
+        }
+
         string_t find(string_t s, string_t prefix) {
             return find(s, prefix, string_t());
         }
+
     }
+
     namespace httplib {
 #define HTTP_OK 200
 #define HTTP_SCHEMA "http://"
 #define HTTPS_SCHEMA "https://"
+        static int retry = 3;
+
         std::string Get(std::string uri) {
             std::string body;
             auto host = strings::lower(uri);
@@ -205,22 +216,63 @@ namespace utils {
                 }
                 auto http = strings::find(host, HTTP_SCHEMA, "/");
                 auto https = strings::find(host, HTTPS_SCHEMA, "/");
-                if (!http.empty()) {
-                    ::httplib::Client client(http);
-                    auto result = client.Get(host.substr(http.size()));
-                    if (result && result->status == HTTP_OK) {
-                        body = result->body;
+                auto retry_ = retry;
+                while (retry_-- > 0) {
+                    ::httplib::Error err = ::httplib::Error::Unknown;
+                    if (!http.empty()) {
+                        ::httplib::Client client(http);
+                        auto result = client.Get(host.substr(http.size()));
+                        if (result) {
+                            body = result->body;
+                            err = result.error();
+                        }
+                    } else if (!https.empty()) {
+                        ::httplib::SSLClient sslClient(strings::replace(https, HTTPS_SCHEMA, ""));
+                        sslClient.enable_server_certificate_verification(false);
+                        auto result = sslClient.Get(host.substr(https.size()));
+                        if (result) {
+                            body = result->body;
+                            err = result.error();
+                        }
                     }
-                } else if (!https.empty()) {
-                    ::httplib::SSLClient sslClient(strings::replace(https, HTTPS_SCHEMA, ""));
-                    sslClient.enable_server_certificate_verification(false);
-                    auto result = sslClient.Get(host.substr(https.size()));
-                    if (result) {
-                        body = result->body;
+                    switch (err) {
+                        case ::httplib::Error::ConnectionTimeout:
+                        case ::httplib::Error::Read:
+                        case ::httplib::Error::Write:
+                            break;
+                        default:
+                            retry_ = 0;
                     }
                 }
             }
             return body;
+        }
+    }
+
+    namespace file {
+        bool exists(string_t path) {
+            return std::filesystem::exists(path);
+        }
+
+        void write(string_t path, std::string data) {
+            auto access = _T("rb+");
+            if (!exists(path)) {
+                access = _T("wb+");
+            }
+#ifdef _MSC_VER
+            FILE *file = nullptr;
+            _tfopen_s(&file, path.c_str(), access);
+#else
+            auto file = fopen(path.c_str(), access);
+#endif
+            if (file) {
+                fseek(file, 0, SEEK_END);
+                fwrite(data.c_str(), sizeof(data.c_str()[0]), data.size(), file);
+                fclose(file);
+#ifdef _MSC_VER
+                file = nullptr;
+#endif
+            }
         }
     }
 #ifdef _MSC_VER
