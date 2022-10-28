@@ -325,7 +325,7 @@ namespace utils {
 #ifdef _MSC_VER
             _sntprintf_s(hex, _countof(hex) - 1, _countof(hex) - 1, _T("%x"), i);
 #else
-            snprintf(hex, _countof(hex) - 1, "%x"), i);
+            snprintf(hex, _countof(hex) - 1, "%x", i);
 #endif
             return hex;
         }
