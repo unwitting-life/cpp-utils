@@ -4,8 +4,9 @@
 #include <windows.h>
 #endif
 
-#include <string>
 #include <vector>
+#include <fstream>
+#include <string>
 #include <iostream>
 #include <cstdio>
 #include <cstring>
@@ -77,19 +78,26 @@
 #endif
 
 #ifdef _MSC_VER
-#define PATH_SEPARATOR '\\'
+#define PATH_SEPARATOR _T('\\')
 #else
-#define PATH_SEPARATOR '/'
+#define PATH_SEPARATOR _T('/')
 #endif
 
 #define LF _T("\n")
 
-#ifndef STRING_FORMAT_BUFFER_SIZE
-#define STRING_FORMAT_BUFFER_SIZE 8192
-#endif
-
 namespace utils {
     namespace io {
+        namespace path {
+            inline string_t combine(string_t path1, string_t path2) {
+                string_t s = path1;
+                if (!s.empty() && s.at(s.size() - 1) != PATH_SEPARATOR) {
+                    s += PATH_SEPARATOR;
+                }
+                s += path2;
+                return s;
+            }
+        }
+
         inline bool exists(string_t path) {
             return std::filesystem::exists(path);
         }
@@ -132,7 +140,7 @@ namespace utils {
         inline string_t mkdir(const string_t path) {
             if (!path.empty()) {
                 string_t::size_type tmp_pos_begin = 0;
-                string_t::size_type tmp_pos = 0;
+                string_t::size_type tmp_pos;
 #ifdef _MSC_VER
                 if (path.find(UNC) == 0) {
                     tmp_pos = path.find(PATH_SEPARATOR, _tcslen(UNC));
@@ -168,7 +176,7 @@ namespace utils {
             return path;
         }
 
-        inline string_t directoryName(string_t path) {
+        inline string_t directoryPath(string_t path) {
             string_t directoryName_ = path;
             auto pos = path.find_last_of(PATH_SEPARATOR);
             if (pos != string_t::npos) {
@@ -185,10 +193,40 @@ namespace utils {
             }
             return fileName_;
         }
+
+        inline string_t fileNameWithoutExtension(string_t path) {
+            string_t fileNameWithoutExtension_ = path;
+            auto pos = path.find_last_of(PATH_SEPARATOR);
+            if (pos != string_t::npos) {
+                fileNameWithoutExtension_ = fileNameWithoutExtension_.substr(pos + 1);
+                pos = fileNameWithoutExtension_.find_last_of(_T("."));
+                if (pos != string_t::npos) {
+                    fileNameWithoutExtension_ = fileNameWithoutExtension_.substr(0, pos);
+                }
+            }
+            return fileNameWithoutExtension_;
+        }
+
+        inline string_t fileExtensionName(string_t path) {
+            string_t fileExtensionName_;
+            auto pos = path.find_last_of(_T("."));
+            if (pos != string_t::npos) {
+                fileExtensionName_ = path.substr(pos + 1);
+            }
+            return fileExtensionName_;
+        }
+
+        inline string_t rename(string_t __old, string_t __new) {
+            ::rename(__old.c_str(), __new.c_str());
+            return __new;
+        }
     }
 
     namespace strings {
         inline std::string replace(std::string s, const std::string target, const std::string replacement, bool replace_first = 0, bool replace_empty = 0) {
+            if (s.empty() || target.empty()) {
+                return s;
+            }
             using S = std::string;
             using C = std::string::value_type;
             using N = std::string::size_type;
@@ -236,24 +274,18 @@ namespace utils {
 
         inline std::string format(std::string f, ...) {
             std::string s;
-            auto p = new char[STRING_FORMAT_BUFFER_SIZE];
-#ifdef _MSC_VER
-            if (p) {
-#endif
             va_list args;
             va_start(args, f);
-#ifdef _MSC_VER
-            _vsnprintf_s(p, STRING_FORMAT_BUFFER_SIZE - 1, STRING_FORMAT_BUFFER_SIZE - 1, f.c_str(), args);
-#else
-            vsnprintf(p, STRING_FORMAT_BUFFER_SIZE - 1, f.c_str(), args);
-#endif
+            auto size = vsnprintf(nullptr, 0, f.c_str(), args) + 1;
             va_end(args);
-            s = p;
-            delete[] p;
-#ifdef _MSC_VER
-            p = nullptr;
-        }
-#endif
+            auto p = (char *) malloc(size);
+            if (p) {
+                va_start(args, f);
+                vsnprintf(p, size, f.c_str(), args);
+                va_end(args);
+                s = p;
+                free(p);
+            }
             return s;
         }
 
@@ -354,8 +386,8 @@ namespace utils {
             return split_;
         }
 
-        inline bool equalsIgnoreCase(std::string s, std::string compre) {
-            return lower(s) == lower(compre);
+        inline bool equalsIgnoreCase(std::string s, std::string compare) {
+            return lower(s) == lower(compare);
         }
 
         inline std::vector<std::string> sort(std::vector<std::string> s, bool descend = false) {
@@ -384,7 +416,9 @@ namespace utils {
                         number.clear();
                     }
                 }
-
+            }
+            if (!number.empty()){
+                numbers_.push_back(number);
             }
             return numbers_;
         }
@@ -401,9 +435,9 @@ namespace utils {
 
         inline std::string number(std::string s) {
             auto number_ = std::string();
-            auto numbers_ = numbers(s);
-            if (!numbers_.empty()) {
-                number_ = numbers_[0];
+            auto vector = numbers(s);
+            if (!vector.empty()) {
+                number_ = vector[0];
             }
             return number_;
         }
@@ -418,6 +452,9 @@ namespace utils {
 #ifdef UNICODE
     namespace strings {
         inline std::wstring replace(std::wstring s, const std::wstring target, const std::wstring replacement, bool replace_first = 0, bool replace_empty = 0) {
+            if (s.empty() || target.empty()) {
+                return s;
+            }
             using S = std::wstring;
             using C = std::wstring::value_type;
             using N = std::wstring::size_type;
@@ -463,26 +500,20 @@ namespace utils {
             return s;
         }
 
-        inline std::wstring format(std::wstring f, ...) {
+      inline std::string format(std::wstring f, ...) {
             std::wstring s;
-            auto p = new wchar_t[STRING_FORMAT_BUFFER_SIZE];
-#ifdef _MSC_VER
+            va_list args;
+            va_start(args, f);
+            auto size = _vsntprintf_s(nullptr, 0, f.c_str(), args) + 1;
+            va_end(args);
+            auto p = (wchat_t*)malloc(size);
             if (p) {
-#endif
-                va_list args;
                 va_start(args, f);
-#ifdef _MSC_VER
-                _vsntprintf_s(p, STRING_FORMAT_BUFFER_SIZE - 1, STRING_FORMAT_BUFFER_SIZE - 1, f.c_str(), args);
-#else
-                vsnprintf(p, STRING_FORMAT_BUFFER_SIZE - 1, f.c_str(), args);
-#endif
+                _vsntprintf_s(p, size, f.c_str(), args);
                 va_end(args);
                 s = p;
-                delete[] p;
-#ifdef _MSC_VER
-                p = nullptr;
+                free(p);
             }
-#endif
             return s;
         }
 
@@ -678,6 +709,17 @@ namespace utils {
         static int retry = 3;
         static int retryWait = 1000;
 
+        inline void init() {
+
+            static bool b = false;
+            if (!b) {
+                b = true;
+#ifndef _MSC_VER
+                signal(SIGPIPE, SIG_IGN);
+#endif
+            }
+        }
+
         inline bool invoke(::httplib::Result result, std::string &body, std::string &location) {
             bool b = true;
             switch (result.error()) {
@@ -714,6 +756,8 @@ namespace utils {
         }
 
         inline std::string Get(std::string uri, ::httplib::Headers *headers) {
+            init();
+
             std::string result;
             auto host = strings::lower(uri);
             if (!host.empty()) {
@@ -751,6 +795,8 @@ namespace utils {
                                 const ::httplib::Headers headers,
                                 const std::string body,
                                 const std::string contentType) {
+            init();
+
             std::string result;
             auto host = strings::lower(uri);
             if (!host.empty()) {
@@ -763,7 +809,6 @@ namespace utils {
                 auto location = std::string();
                 auto b = false;
                 while (retry_-- > 0) {
-                    ::httplib::Error err = ::httplib::Error::Unknown;
                     if (!http.empty()) {
                         ::httplib::Client client(http);
                         b = invoke(client.Post(uri.substr(http.size()), headers, body, contentType), result, location);
@@ -791,6 +836,29 @@ namespace utils {
 #endif
 
     namespace file {
+        inline std::vector<string_t> allLines(string_t path) {
+            std::vector<string_t> lines;
+            std::ifstream in(path);
+            if (in) {
+                string_t line;
+                while (getline(in, line)) {
+                    lines.push_back(line);
+                }
+            }
+            return lines;
+        }
+
+        inline string_t allText(string_t path) {
+            string_t text;
+            std::ifstream in(path);
+            if (in) {
+                std::stringstream buffer;
+                buffer << in.rdbuf();
+                text = buffer.str();
+            }
+            return text;
+        }
+
         inline unsigned long long size(string_t path) {
             return io::exists(path) ? std::filesystem::file_size(path) : -1;
         }
@@ -817,7 +885,7 @@ namespace utils {
         }
 
         inline void write(string_t path, std::string data) {
-            if (io::exists(io::mkdir(io::directoryName(path)))) {
+            if (io::exists(io::mkdir(io::directoryPath(path)))) {
 #ifdef _MSC_VER
                 FILE *file = nullptr;
                 _tfopen_s(&file, path.c_str(), _T("wb+"));
