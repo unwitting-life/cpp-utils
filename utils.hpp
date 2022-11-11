@@ -62,8 +62,12 @@
 #include <tchar.h>
 #pragma comment(lib, "comsuppw.lib")
 #pragma comment(lib, "shlwapi.lib")
+#else
+#define _T(x) x
+#define TCHAR char
+#define _countof(x) sizeof(x) / sizeof(x[0])
+#define __countof(x) _countof(x)
 #endif
-
 
 #ifdef UNICODE
 #define UNC LR"(\\)"
@@ -71,10 +75,6 @@
 #else
 #define UNC R"(\\)"
 #define string_t std::string
-#define TCHAR char
-#define _T(x) x
-#define _countof(x) sizeof(x) / sizeof(x[0])
-#define __countof(x) _countof(x)
 #endif
 
 #ifdef _MSC_VER
@@ -96,6 +96,28 @@ namespace utils {
                 s += path2;
                 return s;
             }
+
+#ifdef _MSC_VER
+            inline string_t GetExeFileName() {
+                TCHAR buffer[MAX_PATH] = { 0 };
+                GetModuleFileName(nullptr, buffer, _countof(buffer) - 1);
+                auto exe = string_t(buffer);
+                auto pos = exe.find_last_of(PATH_SEPARATOR);
+                if (pos != string_t::npos) {
+                    exe = exe.substr(pos + 1);
+                }
+                return exe;
+            }
+
+            inline string_t GetExeFileNameWithoutExtension() {
+                auto exe = GetExeFileName();
+                auto pos = exe.find_last_of(_T("."));
+                if (pos != string_t::npos) {
+                    exe = exe.substr(0, pos);
+                }
+                return exe;
+            }
+#endif
         }
 
         inline bool exists(string_t path) {
@@ -223,13 +245,48 @@ namespace utils {
     }
 
     namespace strings {
-        inline std::string replace(std::string s, const std::string target, const std::string replacement, bool replace_first = 0, bool replace_empty = 0) {
+
+#ifdef _MSC_VER
+        inline std::wstring s2w(const std::string s) {
+            return (wchar_t*)_bstr_t(s.c_str());
+        }
+
+        inline std::string w2s(const std::wstring& s) {
+            return (char*)_bstr_t(s.c_str());
+        }
+
+        inline std::string u2s(const std::string utf8) {
+            std::string s;
+
+            // https://blog.csdn.net/luofeixiongsix/article/details/80245351
+            auto size = MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), -1, nullptr, 0);
+            auto buffer = new wchar_t[size + 1];
+            if (buffer) {
+                ZeroMemory(buffer, sizeof(buffer[0]) * (size + 1));
+                MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), utf8.length(), buffer, size);
+                int length = WideCharToMultiByte(CP_ACP, 0, buffer, -1, nullptr, 0, nullptr, nullptr);
+                char* p = new char[length + 1];
+                if (p) {
+                    ZeroMemory(p, sizeof(p[0]) * (length + 1));
+                    WideCharToMultiByte(CP_ACP, 0, buffer, size, p, length, nullptr, nullptr);
+                    s = p;
+                    delete[] p;
+                    p = nullptr;
+                }
+                delete[] buffer;
+                buffer = nullptr;
+            }
+            return s;
+        }
+#endif
+
+        inline string_t replace(string_t s, const string_t target, const string_t replacement, bool replace_first = 0, bool replace_empty = 0) {
             if (s.empty() || target.empty()) {
                 return s;
             }
-            using S = std::string;
-            using C = std::string::value_type;
-            using N = std::string::size_type;
+            using S = string_t;
+            using C = string_t::value_type;
+            using N = string_t::size_type;
             struct {
                 auto len(const S &s) { return s.size(); }
 
@@ -264,7 +321,7 @@ namespace utils {
             }
 
             N pos = 0;
-            while ((pos = s.find(target, pos)) != std::string::npos) {
+            while ((pos = s.find(target, pos)) != string_t::npos) {
                 util.sub(&s, replacement, pos, target_length);
                 if (replace_first) return s;
                 pos += replacement_length;
@@ -272,8 +329,8 @@ namespace utils {
             return s;
         }
 
-        inline std::string format(std::string f, ...) {
-            std::string s;
+        inline string_t format(string_t f, ...) {
+            string_t s;
             va_list args;
             va_start(args, f);
             auto size = vsnprintf(nullptr, 0, f.c_str(), args) + 1;
@@ -289,32 +346,32 @@ namespace utils {
             return s;
         }
 
-        inline std::string lower(std::string s) {
-            std::string copy = s;
+        inline string_t lower(string_t s) {
+            string_t copy = s;
             std::transform(copy.begin(), copy.end(), copy.begin(), ::tolower);
             return copy;
         }
 
-        inline std::string upper(std::string s) {
-            std::string copy = s;
+        inline string_t upper(string_t s) {
+            string_t copy = s;
             std::transform(copy.begin(), copy.end(), copy.begin(), ::toupper);
             return copy;
         }
 
-        inline bool startsWith(std::string s, std::string find) {
+        inline bool startsWith(string_t s, string_t find) {
             return s.find(find) == 0;
         }
 
-        inline bool endsWith(std::string s, std::string find) {
+        inline bool endsWith(string_t s, string_t find) {
             return s.size() >= find.size() && s.substr(s.size() - find.size()) == find;
         }
 
-        inline std::vector<std::string> findAll(std::string s, std::string prefix, std::string suffix) {
-            std::vector<std::string> find_;
+        inline std::vector<string_t> findAll(string_t s, string_t prefix, string_t suffix) {
+            std::vector<string_t> find_;
             auto prefix_ = s.find(prefix);
-            while (prefix_ != std::string::npos) {
-                auto suffix_ = suffix.empty() ? std::string::npos : s.find(suffix, prefix_ + prefix.size());
-                if (suffix_ == std::string::npos) {
+            while (prefix_ != string_t::npos) {
+                auto suffix_ = suffix.empty() ? string_t::npos : s.find(suffix, prefix_ + prefix.size());
+                if (suffix_ == string_t::npos) {
                     find_.push_back(s.substr(prefix_));
                 } else {
                     find_.push_back(s.substr(prefix_, suffix_ - prefix_ + suffix.size()));
@@ -324,36 +381,36 @@ namespace utils {
             return find_;
         }
 
-        inline std::string find(std::string s, std::string prefix, std::string suffix) {
+        inline string_t find(string_t s, string_t prefix, string_t suffix) {
             auto find_ = findAll(s, prefix, suffix);
-            return find_.empty() ? std::string() : find_.at(0);
+            return find_.empty() ? string_t() : find_.at(0);
         }
 
-        inline std::string find(std::string s, std::string prefix) {
-            return find(s, prefix, std::string());
+        inline string_t find(string_t s, string_t prefix) {
+            return find(s, prefix, string_t());
         }
 
-        inline std::string left(std::string s, size_t size) {
-            return size >= s.size() ? std::string() : s.substr(0, size);
+        inline string_t left(string_t s, size_t size) {
+            return size >= s.size() ? string_t() : s.substr(0, size);
         }
 
-        inline std::string right(std::string s, size_t size) {
-            return size >= s.size() ? std::string() : s.substr(s.size() - size);
+        inline string_t right(string_t s, size_t size) {
+            return size >= s.size() ? string_t() : s.substr(s.size() - size);
         }
 
-        inline std::string truncate(std::string s, std::string prefix, std::string suffix) {
-            auto truncate_ = std::string();
+        inline string_t truncate(string_t s, string_t prefix, string_t suffix) {
+            auto truncate_ = string_t();
             truncate_ = find(s, prefix, suffix);
             truncate_ = strings::right(truncate_, truncate_.size() - prefix.size());
             truncate_ = strings::left(truncate_, truncate_.size() - suffix.size());
             return truncate_;
         }
 
-        inline std::string decrease(std::string s, size_t size = 1) {
+        inline string_t decrease(string_t s, size_t size = 1) {
             return left(s, s.size() >= size ? s.size() - size : 0);
         }
 
-        inline std::string trim(const std::string s) {
+        inline string_t trim(const string_t s) {
             auto trim_ = s;
             while (!trim_.empty() && trim_.at(0) == ' ') {
                 trim_ = trim_.substr(1);
@@ -364,14 +421,14 @@ namespace utils {
             return trim_;
         }
 
-        inline std::vector<std::string> split(std::string s, std::string delim, bool ignoreEmpty = false) {
-            std::vector<std::string> split_;
+        inline std::vector<string_t> split(string_t s, string_t delim, bool ignoreEmpty = false) {
+            std::vector<string_t> split_;
             std::replace_if(s.begin(), s.end(), [&](const char &c) {
-                return delim.find(c) != std::string::npos;
+                return delim.find(c) != string_t::npos;
             }, delim.at(0));
             size_t pos = s.find(delim.at(0));
-            std::string substr;
-            while (pos != std::string::npos) {
+            string_t substr;
+            while (pos != string_t::npos) {
                 substr = s.substr(0, pos);
                 if (!substr.empty() || !ignoreEmpty) {
                     split_.push_back(substr);
@@ -386,16 +443,16 @@ namespace utils {
             return split_;
         }
 
-        inline bool equalsIgnoreCase(std::string s, std::string compare) {
+        inline bool equalsIgnoreCase(string_t s, string_t compare) {
             return lower(s) == lower(compare);
         }
 
-        inline std::vector<std::string> sort(std::vector<std::string> s, bool descend = false) {
-            for (auto i = 0; i < s.size(); i++) {
-                for (auto j = i + 1; j < s.size(); j++) {
+        inline std::vector<string_t> sort(std::vector<string_t> s, bool descend = false) {
+            for (size_t i = 0; i < s.size(); i++) {
+                for (size_t j = i + 1; j < s.size(); j++) {
                     if ((descend && s[i].compare(s[j]) < 0) ||
                         (!descend && s[i].compare(s[j]) > 0)) {
-                        auto tmp = s[i];
+                        string_t tmp = s[i];
                         s[i] = s[j];
                         s[j] = tmp;
                     }
@@ -404,9 +461,9 @@ namespace utils {
             return s;
         }
 
-        inline std::vector<std::string> numbers(std::string s) {
-            std::vector<std::string> numbers_;
-            std::string number;
+        inline std::vector<string_t> numbers(string_t s) {
+            std::vector<string_t> numbers_;
+            string_t number;
             for (auto &e: s) {
                 if (e >= '0' && e <= '9') {
                     number += e;
@@ -423,8 +480,8 @@ namespace utils {
             return numbers_;
         }
 
-        inline int atoi(std::string s) {
-            std::string number;
+        inline int atoi(string_t s) {
+            string_t number;
             for (auto &e: s) {
                 if (e >= '0' && e <= '9') {
                     number += e;
@@ -433,8 +490,8 @@ namespace utils {
             return ::atoi(number.c_str());
         }
 
-        inline std::string number(std::string s) {
-            auto number_ = std::string();
+        inline string_t number(string_t s) {
+            auto number_ = string_t();
             auto vector = numbers(s);
             if (!vector.empty()) {
                 number_ = vector[0];
@@ -442,241 +499,9 @@ namespace utils {
             return number_;
         }
 
-#ifdef UNICODE
-        inline std::string w2s(const std::wstring& s) {
-            return (char*)_bstr_t(s.c_str());
-        }
-#endif
-    }
-
-#ifdef UNICODE
-    namespace strings {
-        inline std::wstring replace(std::wstring s, const std::wstring target, const std::wstring replacement, bool replace_first = 0, bool replace_empty = 0) {
-            if (s.empty() || target.empty()) {
-                return s;
-            }
-            using S = std::wstring;
-            using C = std::wstring::value_type;
-            using N = std::wstring::size_type;
-            struct {
-                auto len(const S& s) { return s.size(); }
-
-                auto len(const C* p) { return std::char_traits<C>::length(p); }
-
-                auto len(const C c) { return sizeof(c); }
-
-                auto sub(S* s, const S& t, N pos, N len) { s->replace(pos, len, t); }
-
-                auto sub(S* s, const C* t, N pos, N len) { s->replace(pos, len, t); }
-
-                auto sub(S* s, const C t, N pos, N len) { s->replace(pos, len, 1, t); }
-
-                auto ins(S* s, const S& t, N pos) { s->insert(pos, t); }
-
-                auto ins(S* s, const C* t, N pos) { s->insert(pos, t); }
-
-                auto ins(S* s, const C t, N pos) { s->insert(pos, 1, t); }
-            } util;
-
-            N target_length = util.len(target);
-            N replacement_length = util.len(replacement);
-            if (target_length == 0) {
-                if (!replace_empty || replacement_length == 0) return s;
-                N n = s.size() + replacement_length * (1 + s.size());
-                s.reserve(!replace_first ? n : s.size() + replacement_length);
-                for (N i = 0; i < n; i += 1 + replacement_length) {
-                    util.ins(&s, replacement, i);
-                    if (replace_first) break;
-                }
-                return s;
-            }
-
-            N pos = 0;
-            while ((pos = s.find(target, pos)) != std::wstring::npos) {
-                util.sub(&s, replacement, pos, target_length);
-                if (replace_first) return s;
-                pos += replacement_length;
-            }
-            return s;
-        }
-
-      inline std::string format(std::wstring f, ...) {
-            std::wstring s;
-            va_list args;
-            va_start(args, f);
-            auto size = _vsntprintf_s(nullptr, 0, f.c_str(), args) + 1;
-            va_end(args);
-            auto p = (wchat_t*)malloc(size);
-            if (p) {
-                va_start(args, f);
-                _vsntprintf_s(p, size, f.c_str(), args);
-                va_end(args);
-                s = p;
-                free(p);
-            }
-            return s;
-        }
-
-        inline std::wstring lower(std::wstring s) {
-            std::wstring copy = s;
-            std::transform(copy.begin(), copy.end(), copy.begin(), ::tolower);
-            return copy;
-        }
-
-        inline std::wstring upper(std::wstring s) {
-            std::wstring copy = s;
-            std::transform(copy.begin(), copy.end(), copy.begin(), ::toupper);
-            return copy;
-        }
-
-        bool startsWith(std::wstring s, std::wstring find) {
-            return s.find(find) == 0;
-        }
-
-        inline bool endsWith(std::wstring s, std::wstring find) {
-            return s.size() >= find.size() && s.substr(s.size() - find.size()) == find;
-        }
-
-        inline std::vector<std::wstring> findAll(std::wstring s, std::wstring prefix, std::wstring suffix) {
-            std::vector<std::wstring> find_;
-            auto prefix_ = s.find(prefix);
-            while (prefix_ != std::string::npos) {
-                auto suffix_ = suffix.empty() ? std::string::npos : s.find(suffix, prefix_ + prefix.size());
-                if (suffix_ == std::string::npos) {
-                    find_.push_back(s.substr(prefix_));
-                } else {
-                    find_.push_back(s.substr(prefix_, suffix_ - prefix_ - suffix.size() + 1));
-                    prefix_ = s.find(prefix, suffix_ + suffix.size());
-                }
-            }
-            return find_;
-        }
-
-        inline std::wstring find(std::wstring s, std::wstring prefix, std::wstring suffix) {
-            auto find_ = findAll(s, prefix, suffix);
-            return find_.empty() ? std::wstring() : find_.at(0);
-        }
-
-        inline std::wstring find(std::wstring s, std::wstring prefix) {
-            return find(s, prefix, std::wstring());
-        }
-
-        inline std::wstring s2w(const std::string& s) {
-            return (wchar_t*)_bstr_t(s.c_str());
-        }
-
-        inline std::wstring left(std::wstring s, size_t size) {
-            return size >= s.size() ? std::wstring() : s.substr(size);
-        }
-
-        inline std::wstring right(std::wstring s, size_t size) {
-            return size >= s.size() ? std::wstring() : s.substr(s.size() - size);
-        }
-
-        inline std::wstring decrease(std::wstring s, size_t size = 1) {
-            return left(s, s.size() >= size ? s.size() - size : 0);
-        }
-
-        inline std::wstring trim(const std::wstring s) {
-            auto trim_ = s;
-            while (!trim_.empty() && trim_.at(0) == ' ') {
-                trim_ = trim_.substr(1);
-            }
-            while (!trim_.empty() && trim_.at(trim_.size() - 1) == ' ') {
-                trim_ = trim_.substr(0, trim_.size() - 1);
-            }
-            return trim_;
-        }
-
-        inline std::wstring truncate(std::wstring s, std::wstring prefix, std::wstring suffix) {
-            auto truncate_ = std::string();
-            truncate_ = find(s, prefix, suffix);
-            truncate_ = strings::right(truncate_, truncate_.size() - prefix.size());
-            truncate_ = strings::left(truncate_, truncate_.size() - suffix.size());
-            return truncate_;
-        }
-
-        inline std::vector<std::wstring> split(std::wstring s, std::wstring delim, bool ignoreEmpty = false) {
-            std::vector<std::wstring> split_;
-            std::replace_if(s.begin(), s.end(), [&](const char &c) {
-                return delim.find(c) != std::wstring::npos;
-            }, delim.at(0));
-            size_t pos = s.find(delim.at(0));
-            std::wstring substr;
-            while (pos != std::wstring::npos) {
-                substr = s.substr(0, pos);
-                if (!substr.empty() || !ignoreEmpty) {
-                    split_.push_back(substr);
-                }
-                s.erase(s.begin(), s.begin() + pos + 1);
-                pos = s.find(delim.at(0));
-            }
-            substr = s;
-            if (!substr.empty() || !ignoreEmpty) {
-                split_.push_back(substr);
-            }
-            return split_;
-        }
-
-        inline bool equalsIgnoreCase(std::wstring s, std::wstring compre) {
-            return lower(s) == lower(compre);
-        }
-
-        inline void sort(std::vector<std::wstring> &s, bool desc = false) {
-            for (auto i = 0; i < s.size(); i++) {
-                for (auto j = i + 1; j < s.size(); j++) {
-                    if ((desc && s[i].compare(s[j]) < 0) ||
-                        (!desc && s[i].compare(s[j]) > 0)) {
-                        auto &tmp = s[i];
-                        s[i] = s[j];
-                        s[j] = tmp;
-                    }
-                }
-            }
-        }
-
-        inline std::vector<std::wstring> numbers(std::wstring s) {
-            std::vector<std::wstring> numbers_;
-            std::wstring number;
-            for (auto &e: s) {
-                if (e >= '0' && e <= '9') {
-                    number += e;
-                } else {
-                    if (!number.empty()) {
-                        numbers_.push_back(number);
-                        number.clear();
-                    }
-                }
-
-            }
-            return numbers_;
-        }
-
-        inline int atoi(std::wstring s) {
-            std::wstring number;
-            for (auto &e: s) {
-                if (e >= '0' && e <= '9') {
-                    number += e;
-                }
-            }
-            return ::atoi(number.c_str());
-        }
-
-         inline std::wstring number(std::wstring s) {
-            auto number_ = std::wstring();
-            auto numbers_ = numbers(s);
-            if (!numbers_.empty()) {
-                number_ = numbers_[0];
-            }
-            return number_;
-        }
-    }
-#endif
-
-    namespace strings {
         inline string_t itoa16(int i) {
             std::string s;
-            TCHAR hex[100] = {0};
+            TCHAR hex[100] = { 0 };
 #ifdef _MSC_VER
             _sntprintf_s(hex, _countof(hex) - 1, _countof(hex) - 1, _T("%x"), i);
 #else
@@ -755,28 +580,28 @@ namespace utils {
             return b;
         }
 
-        inline std::string Get(std::string uri, ::httplib::Headers *headers) {
+        inline std::string Get(string_t uri, ::httplib::Headers *headers) {
             init();
 
             std::string result;
             auto host = strings::lower(uri);
             if (!host.empty()) {
-                if (host.at(host.size() - 1) != '/') {
-                    host += "/";
+                if (host.at(host.size() - 1) != _T('/')) {
+                    host += _T("/");
                 }
-                auto http = strings::decrease(strings::find(host, schema::HTTP, "/"));
-                auto https = strings::decrease(strings::find(host, schema::HTTPS, "/"));
+                auto http = strings::decrease(strings::find(host, schema::HTTP, _T("/")));
+                auto https = strings::decrease(strings::find(host, schema::HTTPS, _T("/")));
                 auto retry_ = retry;
                 auto location = std::string();
                 auto b = false;
                 while (retry_-- > 0) {
                     if (!http.empty()) {
                         ::httplib::Client client(http);
-                        b = invoke(client.Get(strings::replace(uri.substr(http.size()), "//", "/"), headers ? *headers : ::httplib::Headers()), result, location);
+                        b = invoke(client.Get(strings::replace(uri.substr(http.size()), _T("//"), _T("/")), headers ? *headers : ::httplib::Headers()), result, location);
                     } else if (!https.empty()) {
                         ::httplib::SSLClient sslClient(strings::replace(https, schema::HTTPS, ""));
                         sslClient.enable_server_certificate_verification(false);
-                        b = invoke(sslClient.Get(strings::replace(uri.substr(https.size()), "//", "/"), headers ? *headers : ::httplib::Headers()), result, location);
+                        b = invoke(sslClient.Get(strings::replace(uri.substr(https.size()), _T("//"), _T("/")), headers ? *headers : ::httplib::Headers()), result, location);
                     }
                     if (!location.empty()) {
                         result = Get(location, headers);
@@ -800,20 +625,24 @@ namespace utils {
             std::string result;
             auto host = strings::lower(uri);
             if (!host.empty()) {
-                if (host.at(host.size() - 1) != '/') {
-                    host += "/";
+                if (host.at(host.size() - 1) != _T('/')) {
+                    host += _T("/");
                 }
-                auto http = strings::find(host, schema::HTTP, "/");
-                auto https = strings::find(host, schema::HTTPS, "/");
+                auto http = strings::find(host, schema::HTTP, _T("/"));
+                auto https = strings::find(host, schema::HTTPS, _T("/"));
                 auto retry_ = retry;
                 auto location = std::string();
                 auto b = false;
                 while (retry_-- > 0) {
                     if (!http.empty()) {
+#ifdef UNICODE
                         ::httplib::Client client(http);
+#else
+                        ::httplib::Client client(http);
+#endif
                         b = invoke(client.Post(uri.substr(http.size()), headers, body, contentType), result, location);
                     } else if (!https.empty()) {
-                        ::httplib::SSLClient sslClient(strings::replace(https, schema::HTTPS, ""));
+                        ::httplib::SSLClient sslClient(strings::replace(https, schema::HTTPS, _T("")));
                         sslClient.enable_server_certificate_verification(false);
                         b = invoke(sslClient.Post(uri.substr(https.size()), headers, body, contentType), result, location);
                     }
@@ -826,14 +655,6 @@ namespace utils {
             return result;
         }
     }
-
-#ifdef UNICODE
-    namespace httplib {
-        inline std::string Get(std::wstring uri) {
-            return httplib::Get(strings::w2s(uri));
-        }
-    }
-#endif
 
     namespace file {
         inline std::vector<string_t> allLines(string_t path) {
@@ -994,26 +815,6 @@ namespace utils {
             directory = directory.substr(0, pos);
         }
         return directory;
-    }
-
-    inline string_t GetExeFileName() {
-        TCHAR buffer[MAX_PATH] = { 0 };
-        GetModuleFileName(nullptr, buffer, _countof(buffer) - 1);
-        auto exe = string_t(buffer);
-        auto pos = exe.find_last_of(PATH_SEPARATOR);
-        if (pos != string_t::npos) {
-            exe = exe.substr(pos + 1);
-        }
-        return exe;
-    }
-
-    inline string_t GetExeFileNameWithoutExtension() {
-        auto exe = GetExeFileName();
-        auto pos = exe.find_last_of(_T("."));
-        if (pos != string_t::npos) {
-            exe = exe.substr(0, pos);
-        }
-        return exe;
     }
 
     struct CONSOLE_TEXT {
