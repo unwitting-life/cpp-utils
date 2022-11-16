@@ -141,18 +141,23 @@ namespace utils {
             return directories_;
         }
 
-        inline std::vector<string_t> files(string_t path, bool recursive = false) {
+        inline std::vector<string_t> files(string_t path, bool recursive) {
             std::vector<string_t> files_;
             if (exists(path)) {
-                for (const auto &entry: std::filesystem::directory_iterator(path)) {
+                for (const auto& entry : std::filesystem::directory_iterator(path)) {
+#ifdef UNICODE
+                    string_t path_ = reinterpret_cast<LPCWSTR>(entry.path().u16string().c_str());
+#else
+                    string_t path_ = entry.path().string();
+#endif
                     if (entry.is_directory()) {
                         if (recursive) {
-                            for (auto file: files(entry.path().string(), recursive)) {
+                            for (auto& file : files(path_, recursive)) {
                                 files_.push_back(file);
                             }
                         }
                     } else {
-                        files_.push_back(entry.path().string());
+                        files_.push_back(path_);
                     }
                 }
             }
@@ -201,7 +206,9 @@ namespace utils {
         inline string_t directoryPath(string_t path) {
             string_t directoryName_ = path;
             auto pos = path.find_last_of(PATH_SEPARATOR);
-            if (pos != string_t::npos) {
+            if (pos == string_t::npos) {
+                directoryName_ = _T(".");
+            } else {
                 directoryName_ = directoryName_.substr(0, pos);
             }
             return directoryName_;
@@ -221,10 +228,10 @@ namespace utils {
             auto pos = path.find_last_of(PATH_SEPARATOR);
             if (pos != string_t::npos) {
                 fileNameWithoutExtension_ = fileNameWithoutExtension_.substr(pos + 1);
-                pos = fileNameWithoutExtension_.find_last_of(_T("."));
-                if (pos != string_t::npos) {
-                    fileNameWithoutExtension_ = fileNameWithoutExtension_.substr(0, pos);
-                }
+            }
+            pos = fileNameWithoutExtension_.find_last_of(_T("."));
+            if (pos != string_t::npos) {
+                fileNameWithoutExtension_ = fileNameWithoutExtension_.substr(0, pos);
             }
             return fileNameWithoutExtension_;
         }
