@@ -25,30 +25,7 @@
 #endif
 
 #ifdef CPPHTTPLIB_HTTPLIB_SUPPORT
-/*
- * CMakeLists.txt Darwin
- *
- * include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../common/github.com/unwitting.life/cpp-utils/OpenSSL/3.0.6+/darwin64-x86_64-cc/include)
- * link_directories(${CMAKE_CURRENT_SOURCE_DIR}/../common/github.com/unwitting.life/cpp-utils/OpenSSL/3.0.6+/darwin64-x86_64-cc/lib)
- * add_executable(${PROJECT_NAME} main.cpp)
- * target_link_libraries(${PROJECT_NAME} crypto ssl)
- */
-#define CPPHTTPLIB_OPENSSL_SUPPORT
-
-#include "cpp-httplib/v0.11.2+/httplib.h"
-
-#ifdef _MSC_VER
-
-#ifndef UTILS_SOURCE_DIRECTORY
-#define UTILS_SOURCE_DIRECTORY __FILE__
-#endif
-
-#ifdef _WIN64
-#pragma comment(lib, UTILS_SOURCE_DIRECTORY "/../OpenSSL/3.0.6+/VC-WIN64A/lib/libcrypto.lib")
-#pragma comment(lib, UTILS_SOURCE_DIRECTORY "/../OpenSSL/3.0.6+/VC-WIN64A/lib/libssl.lib")
-#endif
-
-#endif
+#include "httpLib.hpp"
 #endif
 
 #ifdef _MSC_VER
@@ -74,9 +51,11 @@
 #ifdef UNICODE
 #define UNC LR"(\\)"
 #define string_t std::wstring
+#define stringstream_t std::wstringstream
 #else
 #define UNC R"(\\)"
 #define string_t std::string
+#define stringstream_t std::stringstream
 #endif
 
 #ifdef _MSC_VER
@@ -88,6 +67,287 @@
 #define LF _T("\n")
 
 namespace utils {
+    namespace strings {
+
+#ifdef _MSC_VER
+        inline std::wstring t2w(const std::string s) {
+            return (wchar_t*)_bstr_t(s.c_str());
+        }
+
+        inline std::wstring t2w(const std::wstring s) {
+            return s;
+        }
+
+        inline std::string t2s(const std::string& s) {
+            return s;
+        }
+
+        inline std::string t2s(const std::wstring& s) {
+            return (char*)_bstr_t(s.c_str());
+        }
+
+        inline std::string u2s(const std::string utf8) {
+            std::string s;
+
+            // https://blog.csdn.net/luofeixiongsix/article/details/80245351
+            auto size = MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), -1, nullptr, 0);
+            auto buffer = new wchar_t[size + 1];
+            if (buffer) {
+                ZeroMemory(buffer, sizeof(buffer[0]) * (size + 1));
+                MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), static_cast<int>(utf8.length()), buffer, size);
+                int length = WideCharToMultiByte(CP_ACP, 0, buffer, -1, nullptr, 0, nullptr, nullptr);
+                char* p = new char[length + 1];
+                if (p) {
+                    ZeroMemory(p, sizeof(p[0]) * (length + 1));
+                    WideCharToMultiByte(CP_ACP, 0, buffer, size, p, length, nullptr, nullptr);
+                    s = p;
+                    delete[] p;
+                    p = nullptr;
+                }
+                delete[] buffer;
+                buffer = nullptr;
+            }
+            return s;
+        }
+#endif
+
+        inline string_t replace(string_t s, const string_t target, const string_t replacement, bool replace_first = 0, bool replace_empty = 0) {
+            if (s.empty() || target.empty()) {
+                return s;
+            }
+            using S = string_t;
+            using C = string_t::value_type;
+            using N = string_t::size_type;
+            struct {
+                auto len(const S& s) { return s.size(); }
+
+                auto len(const C* p) { return std::char_traits<C>::length(p); }
+
+                auto len(const C c) { return sizeof(c); }
+
+                auto sub(S* s, const S& t, N pos, N len) { s->replace(pos, len, t); }
+
+                auto sub(S* s, const C* t, N pos, N len) { s->replace(pos, len, t); }
+
+                auto sub(S* s, const C t, N pos, N len) { s->replace(pos, len, 1, t); }
+
+                auto ins(S* s, const S& t, N pos) { s->insert(pos, t); }
+
+                auto ins(S* s, const C* t, N pos) { s->insert(pos, t); }
+
+                auto ins(S* s, const C t, N pos) { s->insert(pos, 1, t); }
+            } util;
+
+            N target_length = util.len(target);
+            N replacement_length = util.len(replacement);
+            if (target_length == 0) {
+                if (!replace_empty || replacement_length == 0) return s;
+                N n = s.size() + replacement_length * (1 + s.size());
+                s.reserve(!replace_first ? n : s.size() + replacement_length);
+                for (N i = 0; i < n; i += 1 + replacement_length) {
+                    util.ins(&s, replacement, i);
+                    if (replace_first) break;
+                }
+                return s;
+            }
+
+            N pos = 0;
+            while ((pos = s.find(target, pos)) != string_t::npos) {
+                util.sub(&s, replacement, pos, target_length);
+                if (replace_first) return s;
+                pos += replacement_length;
+            }
+            return s;
+        }
+
+        inline string_t format(string_t f, ...) {
+            string_t s;
+            va_list args;
+            va_start(args, f);
+            size_t size = (_vsctprintf(f.c_str(), args) + 1) * sizeof(TCHAR);
+            va_end(args);
+            auto p = reinterpret_cast<LPTSTR>(malloc(size));
+            if (p) {
+                va_start(args, f);
+                _vsntprintf_s(p, size, _TRUNCATE, f.c_str(), args);
+                va_end(args);
+                s = p;
+                free(p);
+            }
+            return s;
+        }
+
+        inline string_t lower(string_t s) {
+            string_t copy = s;
+            std::transform(copy.begin(), copy.end(), copy.begin(), ::tolower);
+            return copy;
+        }
+
+        inline string_t upper(string_t s) {
+            string_t copy = s;
+            std::transform(copy.begin(), copy.end(), copy.begin(), ::toupper);
+            return copy;
+        }
+
+        inline bool startsWith(string_t s, string_t find) {
+            return s.find(find) == 0;
+        }
+
+        inline bool endsWith(string_t s, string_t find) {
+            return s.size() >= find.size() && s.substr(s.size() - find.size()) == find;
+        }
+
+        inline std::vector<string_t> findAll(string_t s, string_t prefix, string_t suffix) {
+            std::vector<string_t> find_;
+            auto prefix_ = s.find(prefix);
+            while (prefix_ != string_t::npos) {
+                auto suffix_ = suffix.empty() ? string_t::npos : s.find(suffix, prefix_ + prefix.size());
+                if (suffix_ == string_t::npos) {
+                    find_.push_back(s.substr(prefix_));
+                }
+                else {
+                    find_.push_back(s.substr(prefix_, suffix_ - prefix_ + suffix.size()));
+                    prefix_ = s.find(prefix, suffix_ + suffix.size());
+                }
+            }
+            return find_;
+        }
+
+        inline string_t find(string_t s, string_t prefix, string_t suffix) {
+            auto find_ = findAll(s, prefix, suffix);
+            return find_.empty() ? string_t() : find_.at(0);
+        }
+
+        inline string_t find(string_t s, string_t prefix) {
+            return find(s, prefix, string_t());
+        }
+
+        inline string_t left(string_t s, size_t size) {
+            return size >= s.size() ? string_t() : s.substr(0, size);
+        }
+
+        inline string_t right(string_t s, size_t size) {
+            return size >= s.size() ? string_t() : s.substr(s.size() - size);
+        }
+
+        inline string_t truncate(string_t s, string_t prefix, string_t suffix) {
+            auto truncate_ = string_t();
+            truncate_ = find(s, prefix, suffix);
+            truncate_ = strings::right(truncate_, truncate_.size() - prefix.size());
+            truncate_ = strings::left(truncate_, truncate_.size() - suffix.size());
+            return truncate_;
+        }
+
+        inline string_t decrease(string_t s, size_t size = 1) {
+            return left(s, s.size() >= size ? s.size() - size : 0);
+        }
+
+        inline string_t trim(const string_t s) {
+            auto trim_ = s;
+            while (!trim_.empty() && trim_.at(0) == ' ') {
+                trim_ = trim_.substr(1);
+            }
+            while (!trim_.empty() && trim_.at(trim_.size() - 1) == ' ') {
+                trim_ = trim_.substr(0, trim_.size() - 1);
+            }
+            return trim_;
+        }
+
+        inline std::vector<string_t> split(string_t s, string_t delim, bool ignoreEmpty = false) {
+            std::vector<string_t> split_;
+            std::replace_if(s.begin(), s.end(), [&](const TCHAR& c) {
+                return delim.find(c) != string_t::npos;
+            }, delim.at(0));
+            size_t pos = s.find(delim.at(0));
+            string_t substr;
+            while (pos != string_t::npos) {
+                substr = s.substr(0, pos);
+                if (!substr.empty() || !ignoreEmpty) {
+                    split_.push_back(substr);
+                }
+                s.erase(s.begin(), s.begin() + pos + 1);
+                pos = s.find(delim.at(0));
+            }
+            substr = s;
+            if (!substr.empty() || !ignoreEmpty) {
+                split_.push_back(substr);
+            }
+            return split_;
+        }
+
+        inline bool equalsIgnoreCase(string_t s, string_t compare) {
+            return lower(s) == lower(compare);
+        }
+
+        inline std::vector<string_t> sort(std::vector<string_t> s, bool descend = false) {
+            for (size_t i = 0; i < s.size(); i++) {
+                for (size_t j = i + 1; j < s.size(); j++) {
+                    if ((descend && s[i].compare(s[j]) < 0) ||
+                        (!descend && s[i].compare(s[j]) > 0)) {
+                        string_t tmp = s[i];
+                        s[i] = s[j];
+                        s[j] = tmp;
+                    }
+                }
+            }
+            return s;
+        }
+
+        inline std::vector<string_t> numbers(string_t s) {
+            std::vector<string_t> numbers_;
+            string_t number;
+            for (auto& e : s) {
+                if (e >= '0' && e <= '9') {
+                    number += e;
+                }
+                else {
+                    if (!number.empty()) {
+                        numbers_.push_back(number);
+                        number.clear();
+                    }
+                }
+            }
+            if (!number.empty()) {
+                numbers_.push_back(number);
+            }
+            return numbers_;
+        }
+
+        inline int atoi(string_t s) {
+            string_t number;
+            for (auto& e : s) {
+                if (e >= '0' && e <= '9') {
+                    number += e;
+                }
+            }
+            return ::atoi(t2s(number).c_str());
+        }
+
+        inline string_t number(string_t s) {
+            auto number_ = string_t();
+            auto vector = numbers(s);
+            if (!vector.empty()) {
+                number_ = vector[0];
+            }
+            return number_;
+        }
+
+        inline string_t itoa16(int i) {
+            std::string s;
+            TCHAR hex[100] = { 0 };
+#ifdef _MSC_VER
+            _sntprintf_s(hex, _countof(hex) - 1, _countof(hex) - 1, _T("%x"), i);
+#else
+            snprintf(hex, _countof(hex) - 1, "%x", i);
+#endif
+            return hex;
+        }
+
+        inline string_t hex(int i) {
+            return itoa16(i);
+        }
+    }
+
     namespace io {
         namespace path {
             inline string_t combine(string_t path1, string_t path2) {
@@ -131,9 +391,17 @@ namespace utils {
             if (exists(path)) {
                 for (const auto &entry: std::filesystem::directory_iterator(path)) {
                     if (entry.is_directory()) {
+#ifdef UNICODE
+                        directories_.push_back(entry.path().wstring());
+#else
                         directories_.push_back(entry.path().string());
+#endif
                         if (recursive) {
-                            for (auto directory: directories(entry.path().string(), recursive)) {
+#ifdef UNICODE
+                            for (auto& directory : directories(entry.path().wstring(), recursive)) {
+#else
+                            for (auto& directory : directories(entry.path().string(), recursive)) {
+#endif
                                 directories_.push_back(directory);
                             }
                         }
@@ -248,420 +516,8 @@ namespace utils {
         }
 
         inline string_t rename(string_t __old, string_t __new) {
-            ::rename(__old.c_str(), __new.c_str());
+            ::rename(utils::strings::t2s(__old).c_str(), utils::strings::t2s(__new).c_str());
             return __new;
-        }
-    }
-
-    namespace strings {
-
-#ifdef _MSC_VER
-        inline std::wstring s2w(const std::string s) {
-            return (wchar_t*)_bstr_t(s.c_str());
-        }
-
-        inline std::string w2s(const std::wstring& s) {
-            return (char*)_bstr_t(s.c_str());
-        }
-
-        inline std::string u2s(const std::string utf8) {
-            std::string s;
-
-            // https://blog.csdn.net/luofeixiongsix/article/details/80245351
-            auto size = MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), -1, nullptr, 0);
-            auto buffer = new wchar_t[size + 1];
-            if (buffer) {
-                ZeroMemory(buffer, sizeof(buffer[0]) * (size + 1));
-                MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), utf8.length(), buffer, size);
-                int length = WideCharToMultiByte(CP_ACP, 0, buffer, -1, nullptr, 0, nullptr, nullptr);
-                char* p = new char[length + 1];
-                if (p) {
-                    ZeroMemory(p, sizeof(p[0]) * (length + 1));
-                    WideCharToMultiByte(CP_ACP, 0, buffer, size, p, length, nullptr, nullptr);
-                    s = p;
-                    delete[] p;
-                    p = nullptr;
-                }
-                delete[] buffer;
-                buffer = nullptr;
-            }
-            return s;
-        }
-#endif
-
-        inline string_t replace(string_t s, const string_t target, const string_t replacement, bool replace_first = 0, bool replace_empty = 0) {
-            if (s.empty() || target.empty()) {
-                return s;
-            }
-            using S = string_t;
-            using C = string_t::value_type;
-            using N = string_t::size_type;
-            struct {
-                auto len(const S &s) { return s.size(); }
-
-                auto len(const C *p) { return std::char_traits<C>::length(p); }
-
-                auto len(const C c) { return sizeof(c); }
-
-                auto sub(S *s, const S &t, N pos, N len) { s->replace(pos, len, t); }
-
-                auto sub(S *s, const C *t, N pos, N len) { s->replace(pos, len, t); }
-
-                auto sub(S *s, const C t, N pos, N len) { s->replace(pos, len, 1, t); }
-
-                auto ins(S *s, const S &t, N pos) { s->insert(pos, t); }
-
-                auto ins(S *s, const C *t, N pos) { s->insert(pos, t); }
-
-                auto ins(S *s, const C t, N pos) { s->insert(pos, 1, t); }
-            } util;
-
-            N target_length = util.len(target);
-            N replacement_length = util.len(replacement);
-            if (target_length == 0) {
-                if (!replace_empty || replacement_length == 0) return s;
-                N n = s.size() + replacement_length * (1 + s.size());
-                s.reserve(!replace_first ? n : s.size() + replacement_length);
-                for (N i = 0; i < n; i += 1 + replacement_length) {
-                    util.ins(&s, replacement, i);
-                    if (replace_first) break;
-                }
-                return s;
-            }
-
-            N pos = 0;
-            while ((pos = s.find(target, pos)) != string_t::npos) {
-                util.sub(&s, replacement, pos, target_length);
-                if (replace_first) return s;
-                pos += replacement_length;
-            }
-            return s;
-        }
-
-        inline string_t format(string_t f, ...) {
-            string_t s;
-            va_list args;
-            va_start(args, f);
-            auto size = vsnprintf(nullptr, 0, f.c_str(), args) + 1;
-            va_end(args);
-            auto p = (char *) malloc(size);
-            if (p) {
-                va_start(args, f);
-                vsnprintf(p, size, f.c_str(), args);
-                va_end(args);
-                s = p;
-                free(p);
-            }
-            return s;
-        }
-
-        inline string_t lower(string_t s) {
-            string_t copy = s;
-            std::transform(copy.begin(), copy.end(), copy.begin(), ::tolower);
-            return copy;
-        }
-
-        inline string_t upper(string_t s) {
-            string_t copy = s;
-            std::transform(copy.begin(), copy.end(), copy.begin(), ::toupper);
-            return copy;
-        }
-
-        inline bool startsWith(string_t s, string_t find) {
-            return s.find(find) == 0;
-        }
-
-        inline bool endsWith(string_t s, string_t find) {
-            return s.size() >= find.size() && s.substr(s.size() - find.size()) == find;
-        }
-
-        inline std::vector<string_t> findAll(string_t s, string_t prefix, string_t suffix) {
-            std::vector<string_t> find_;
-            auto prefix_ = s.find(prefix);
-            while (prefix_ != string_t::npos) {
-                auto suffix_ = suffix.empty() ? string_t::npos : s.find(suffix, prefix_ + prefix.size());
-                if (suffix_ == string_t::npos) {
-                    find_.push_back(s.substr(prefix_));
-                } else {
-                    find_.push_back(s.substr(prefix_, suffix_ - prefix_ + suffix.size()));
-                    prefix_ = s.find(prefix, suffix_ + suffix.size());
-                }
-            }
-            return find_;
-        }
-
-        inline string_t find(string_t s, string_t prefix, string_t suffix) {
-            auto find_ = findAll(s, prefix, suffix);
-            return find_.empty() ? string_t() : find_.at(0);
-        }
-
-        inline string_t find(string_t s, string_t prefix) {
-            return find(s, prefix, string_t());
-        }
-
-        inline string_t left(string_t s, size_t size) {
-            return size >= s.size() ? string_t() : s.substr(0, size);
-        }
-
-        inline string_t right(string_t s, size_t size) {
-            return size >= s.size() ? string_t() : s.substr(s.size() - size);
-        }
-
-        inline string_t truncate(string_t s, string_t prefix, string_t suffix) {
-            auto truncate_ = string_t();
-            truncate_ = find(s, prefix, suffix);
-            truncate_ = strings::right(truncate_, truncate_.size() - prefix.size());
-            truncate_ = strings::left(truncate_, truncate_.size() - suffix.size());
-            return truncate_;
-        }
-
-        inline string_t decrease(string_t s, size_t size = 1) {
-            return left(s, s.size() >= size ? s.size() - size : 0);
-        }
-
-        inline string_t trim(const string_t s) {
-            auto trim_ = s;
-            while (!trim_.empty() && trim_.at(0) == ' ') {
-                trim_ = trim_.substr(1);
-            }
-            while (!trim_.empty() && trim_.at(trim_.size() - 1) == ' ') {
-                trim_ = trim_.substr(0, trim_.size() - 1);
-            }
-            return trim_;
-        }
-
-        inline std::vector<string_t> split(string_t s, string_t delim, bool ignoreEmpty = false) {
-            std::vector<string_t> split_;
-            std::replace_if(s.begin(), s.end(), [&](const char &c) {
-                return delim.find(c) != string_t::npos;
-            }, delim.at(0));
-            size_t pos = s.find(delim.at(0));
-            string_t substr;
-            while (pos != string_t::npos) {
-                substr = s.substr(0, pos);
-                if (!substr.empty() || !ignoreEmpty) {
-                    split_.push_back(substr);
-                }
-                s.erase(s.begin(), s.begin() + pos + 1);
-                pos = s.find(delim.at(0));
-            }
-            substr = s;
-            if (!substr.empty() || !ignoreEmpty) {
-                split_.push_back(substr);
-            }
-            return split_;
-        }
-
-        inline bool equalsIgnoreCase(string_t s, string_t compare) {
-            return lower(s) == lower(compare);
-        }
-
-        inline std::vector<string_t> sort(std::vector<string_t> s, bool descend = false) {
-            for (size_t i = 0; i < s.size(); i++) {
-                for (size_t j = i + 1; j < s.size(); j++) {
-                    if ((descend && s[i].compare(s[j]) < 0) ||
-                        (!descend && s[i].compare(s[j]) > 0)) {
-                        string_t tmp = s[i];
-                        s[i] = s[j];
-                        s[j] = tmp;
-                    }
-                }
-            }
-            return s;
-        }
-
-        inline std::vector<string_t> numbers(string_t s) {
-            std::vector<string_t> numbers_;
-            string_t number;
-            for (auto &e: s) {
-                if (e >= '0' && e <= '9') {
-                    number += e;
-                } else {
-                    if (!number.empty()) {
-                        numbers_.push_back(number);
-                        number.clear();
-                    }
-                }
-            }
-            if (!number.empty()){
-                numbers_.push_back(number);
-            }
-            return numbers_;
-        }
-
-        inline int atoi(string_t s) {
-            string_t number;
-            for (auto &e: s) {
-                if (e >= '0' && e <= '9') {
-                    number += e;
-                }
-            }
-            return ::atoi(number.c_str());
-        }
-
-        inline string_t number(string_t s) {
-            auto number_ = string_t();
-            auto vector = numbers(s);
-            if (!vector.empty()) {
-                number_ = vector[0];
-            }
-            return number_;
-        }
-
-        inline string_t itoa16(int i) {
-            std::string s;
-            TCHAR hex[100] = { 0 };
-#ifdef _MSC_VER
-            _sntprintf_s(hex, _countof(hex) - 1, _countof(hex) - 1, _T("%x"), i);
-#else
-            snprintf(hex, _countof(hex) - 1, "%x", i);
-#endif
-            return hex;
-        }
-
-        inline string_t hex(int i) {
-            return itoa16(i);
-        }
-    }
-
-    namespace httplib {
-        namespace header {
-            constexpr auto Location = _T("Location");
-            constexpr auto Referer = _T("referer");
-        }
-
-        namespace schema {
-            constexpr auto HTTP = _T("http://");
-            constexpr auto HTTPS = _T("https://");
-        }
-        namespace status {
-            constexpr int UNKNOWN = 0;
-            constexpr int OK = 200;
-            constexpr int PERMANENTLY_MOVED = 301;
-            constexpr int TEMPORARILY_MOVED = 302;
-        }
-        static int retry = 3;
-        static int retryWait = 1000;
-
-        inline void init() {
-
-            static bool b = false;
-            if (!b) {
-                b = true;
-#ifndef _MSC_VER
-                signal(SIGPIPE, SIG_IGN);
-#endif
-            }
-        }
-
-        inline bool invoke(::httplib::Result result, std::string &body, std::string &location) {
-            bool b = true;
-            switch (result.error()) {
-                case ::httplib::Error::ConnectionTimeout:
-                case ::httplib::Error::Read:
-                case ::httplib::Error::Write:
-#ifdef _MSC_VER
-                    Sleep(retryWait);
-#else
-                    sleep(retryWait / 1000);
-#endif
-                    b = false;
-                    break;
-                case ::httplib::Error::Success:
-                    switch (result->status) {
-                        case status::PERMANENTLY_MOVED:
-                        case status::TEMPORARILY_MOVED: {
-                            for (auto header: result->headers) {
-                                if (strings::equalsIgnoreCase(header.first, header::Location)) {
-                                    location = header.second;
-                                    break;
-                                }
-                            }
-                        }
-                        default:
-                            body = result->body;
-                            break;
-                    }
-                    break;
-                default:
-                    break;
-            }
-            return b;
-        }
-
-        inline std::string Get(string_t uri, ::httplib::Headers *headers) {
-            init();
-
-            std::string result;
-            auto host = strings::lower(uri);
-            if (!host.empty()) {
-                if (host.at(host.size() - 1) != _T('/')) {
-                    host += _T("/");
-                }
-                auto http = strings::decrease(strings::find(host, schema::HTTP, _T("/")));
-                auto https = strings::decrease(strings::find(host, schema::HTTPS, _T("/")));
-                auto retry_ = retry;
-                auto location = std::string();
-                auto b = false;
-                while (retry_-- > 0) {
-                    if (!http.empty()) {
-                        ::httplib::Client client(http);
-                        b = invoke(client.Get(strings::replace(uri.substr(http.size()), _T("//"), _T("/")), headers ? *headers : ::httplib::Headers()), result, location);
-                    } else if (!https.empty()) {
-                        ::httplib::SSLClient sslClient(strings::replace(https, schema::HTTPS, ""));
-                        sslClient.enable_server_certificate_verification(false);
-                        b = invoke(sslClient.Get(strings::replace(uri.substr(https.size()), _T("//"), _T("/")), headers ? *headers : ::httplib::Headers()), result, location);
-                    }
-                    if (!location.empty()) {
-                        result = Get(location, headers);
-                    }
-                    retry_ = b ? 0 : (location.empty() ? retry_ - 1 : 0);
-                }
-            }
-            return result;
-        }
-
-        inline std::string Get(std::string uri) {
-            return Get(uri, nullptr);
-        }
-
-        inline std::string Post(const std::string uri,
-                                const ::httplib::Headers headers,
-                                const std::string body,
-                                const std::string contentType) {
-            init();
-
-            std::string result;
-            auto host = strings::lower(uri);
-            if (!host.empty()) {
-                if (host.at(host.size() - 1) != _T('/')) {
-                    host += _T("/");
-                }
-                auto http = strings::find(host, schema::HTTP, _T("/"));
-                auto https = strings::find(host, schema::HTTPS, _T("/"));
-                auto retry_ = retry;
-                auto location = std::string();
-                auto b = false;
-                while (retry_-- > 0) {
-                    if (!http.empty()) {
-#ifdef UNICODE
-                        ::httplib::Client client(http);
-#else
-                        ::httplib::Client client(http);
-#endif
-                        b = invoke(client.Post(uri.substr(http.size()), headers, body, contentType), result, location);
-                    } else if (!https.empty()) {
-                        ::httplib::SSLClient sslClient(strings::replace(https, schema::HTTPS, _T("")));
-                        sslClient.enable_server_certificate_verification(false);
-                        b = invoke(sslClient.Post(uri.substr(https.size()), headers, body, contentType), result, location);
-                    }
-                    if (!location.empty()) {
-                        result = Post(location, headers, body, contentType);
-                    }
-                    retry_ = b ? 0 : (location.empty() ? retry_ - 1 : 0);
-                }
-            }
-            return result;
         }
     }
 
@@ -670,9 +526,9 @@ namespace utils {
             std::vector<string_t> lines;
             std::ifstream in(path);
             if (in) {
-                string_t line;
+                std::string line;
                 while (getline(in, line)) {
-                    lines.push_back(line);
+                    lines.push_back(utils::strings::t2w(line));
                 }
             }
             return lines;
@@ -682,7 +538,7 @@ namespace utils {
             string_t text;
             std::ifstream in(path);
             if (in) {
-                std::stringstream buffer;
+                stringstream_t buffer;
                 buffer << in.rdbuf();
                 text = buffer.str();
             }
@@ -738,7 +594,7 @@ namespace utils {
 
         inline void remove(string_t path) {
             if (io::exists(path)) {
-                ::remove(path.c_str());
+                ::remove(utils::strings::t2s(path).c_str());
             }
         }
 
@@ -922,11 +778,7 @@ namespace utils {
         if (file) {
             fseek(file, 0, SEEK_END);
             std::string text;
-#ifdef UNICODE
-            text = strings::w2s(log);
-#else
-            text = log;
-#endif
+            text = utils::strings::t2s(log);
             fwrite(log.c_str(), sizeof(log.c_str()[0]), log.size(), file);
             fclose(file);
             file = nullptr;
@@ -1186,7 +1038,7 @@ namespace utils {
                             out += strings::format(_T("[%s] %s"), Now().c_str(), line.c_str());
                         }
 #ifdef UNICODE
-                        std::string ansi = w2s(out);
+                        std::string ansi = _t2s(out);
 #else
                         std::string ansi = out;
 #endif
