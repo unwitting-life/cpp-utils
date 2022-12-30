@@ -1,5 +1,9 @@
 ﻿#pragma once
 #ifdef _MSC_VER
+#ifndef WIN32
+#define WIN32
+#endif
+
 #define _WINSOCKAPI_    // stops windows.h including winsock.h
 #include <windows.h>
 #endif
@@ -11,10 +15,8 @@
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
-
-#ifdef BASE64_SUPPORT
-#include "base64/base64.hpp"
-#endif
+#include "./easy-encryption/encrypt.h"
+#include "./base64/base64.hpp"
 
 #ifdef JSON_SUPPORT
 #include "nlohmann/json/3.11.2+/json.hpp"
@@ -26,7 +28,7 @@
 #include "httpLib.hpp"
 #endif
 
-#ifdef _MSC_VER
+#ifdef WIN32
 #include <iostream>
 #include <stdio.h>
 #include <conio.h>
@@ -40,10 +42,14 @@
 #pragma comment(lib, "comsuppw.lib")
 #pragma comment(lib, "shlwapi.lib")
 #else
+
+#include <sys/stat.h>
+#include <sstream>
+#include <codecvt>
+
 #define _T(x) x
 #define TCHAR char
-#define _countof(x) sizeof(x) / sizeof(x[0])
-#define __countof(x) _countof(x)
+#define _countof(x) (sizeof(x) / sizeof(x[0]))
 #endif
 
 #ifdef UNICODE
@@ -56,28 +62,100 @@
 #define stringstream_t std::stringstream
 #endif
 
-#ifdef _MSC_VER
+#ifdef WIN32
 #define PATH_SEPARATOR _T('\\')
 #else
 #define PATH_SEPARATOR _T('/')
 #endif
 
+#define CR _T("\r")
 #define LF _T("\n")
 
 namespace utils {
     namespace strings {
+        inline std::wstring t2w(const std::string &s) {
+            std::wstring w;
+            if (!s.empty()) {
+                size_t pos;
+                size_t begin = 0;
+#ifdef WIN32
+                int size = 0;
+                pos = str.find(static_cast<char>(0), begin);
+                while (pos != std::string::npos) {
+                    auto segment = std::string(&str[begin], pos - begin);
+                    auto converted = std::wstring(segment.size() + 1, 0);
+                    size = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, &segment[0], segment.size(), &converted[0], converted.length());
+                    converted.resize(size);
+                    ret.append(converted);
+                    ret.append({ 0 });
+                    begin = pos + 1;
+                    pos = str.find(static_cast<char>(0), begin);
+                }
+                if (begin < str.length()) {
+                    auto segment = std::string(&str[begin], str.length() - begin);
+                    auto converted = std::wstring(segment.size() + 1, 0);
+                    size = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, segment.c_str(), segment.size(), &converted[0], converted.length());
+                    converted.resize(size);
+                    ret.append(converted);
+                }
+#else
+                size_t size;
+                pos = s.find(static_cast<char>(0), begin);
+                while (pos != std::string::npos) {
+                    auto segment = std::string(&s[begin], pos - begin);
+                    auto converted = std::wstring(segment.size(), 0);
+                    size = mbstowcs(&converted[0], &segment[0], converted.size());
+                    converted.resize(size);
+                    w.append(converted);
+                    w.append({0});
+                    begin = pos + 1;
+                    pos = s.find(static_cast<char>(0), begin);
+                }
+                if (begin < s.length()) {
+                    auto segment = std::string(&s[begin], s.length() - begin);
+                    auto converted = std::wstring(segment.size(), 0);
+                    size = mbstowcs(&converted[0], &segment[0], converted.size());
+                    converted.resize(size);
+                    w.append(converted);
+                }
+#endif
+            }
+            return w;
+        }
 
-#ifdef _MSC_VER
+        inline std::wstring t2w(const std::wstring &s) {
+            return s;
+        }
+
+        inline std::string t2s(const std::string &s) {
+            return s;
+        }
+
+        inline std::string t2s(const std::wstring &s) {
+            // https://stackoverflow.com/questions/11512656/how-to-print-c-wstring-utf-8-characters-to-mac-os-or-unix-terminal
+            std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t> convert;
+            return convert.to_bytes(s);
+        }
+
+        inline string_t t2t(const std::string &s) {
+#ifdef UNICODE
+            return t2w(s);
+#else
+            return t2s(s);
+#endif
+        }
+
+        inline string_t t2t(const std::wstring &s) {
+#ifdef UNICODE
+            return t2w(s);
+#else
+            return t2s(s);
+#endif
+        }
+
+#ifdef WIN32
         inline std::wstring t2w(const std::string s) {
             return (wchar_t*)_bstr_t(s.c_str());
-        }
-
-        inline std::wstring t2w(const std::wstring s) {
-            return s;
-        }
-
-        inline std::string t2s(const std::string& s) {
-            return s;
         }
 
         inline std::string t2s(const std::wstring& s) {
@@ -117,23 +195,23 @@ namespace utils {
             using C = string_t::value_type;
             using N = string_t::size_type;
             struct {
-                auto len(const S& s) { return s.size(); }
+                auto len(const S &s) { return s.size(); }
 
-                auto len(const C* p) { return std::char_traits<C>::length(p); }
+                auto len(const C *p) { return std::char_traits<C>::length(p); }
 
                 auto len(const C c) { return sizeof(c); }
 
-                auto sub(S* s, const S& t, N pos, N len) { s->replace(pos, len, t); }
+                auto sub(S *s, const S &t, N pos, N len) { s->replace(pos, len, t); }
 
-                auto sub(S* s, const C* t, N pos, N len) { s->replace(pos, len, t); }
+                auto sub(S *s, const C *t, N pos, N len) { s->replace(pos, len, t); }
 
-                auto sub(S* s, const C t, N pos, N len) { s->replace(pos, len, 1, t); }
+                auto sub(S *s, const C t, N pos, N len) { s->replace(pos, len, 1, t); }
 
-                auto ins(S* s, const S& t, N pos) { s->insert(pos, t); }
+                auto ins(S *s, const S &t, N pos) { s->insert(pos, t); }
 
-                auto ins(S* s, const C* t, N pos) { s->insert(pos, t); }
+                auto ins(S *s, const C *t, N pos) { s->insert(pos, t); }
 
-                auto ins(S* s, const C t, N pos) { s->insert(pos, 1, t); }
+                auto ins(S *s, const C t, N pos) { s->insert(pos, 1, t); }
             } util;
 
             N target_length = util.len(target);
@@ -162,13 +240,23 @@ namespace utils {
             string_t s;
             va_list args;
             va_start(args, f);
+
+            // https://stackoverflow.com/questions/16351523/vscwprintf-on-mac-os-x-linux
+#ifdef WIN32
             size_t size = (_vsctprintf(f.c_str(), args) + 1) * sizeof(TCHAR);
+#else
+            size_t size = (vsnprintf(nullptr, 0, f.c_str(), args) + 1) * sizeof(TCHAR);
+#endif
             va_end(args);
             auto p = new TCHAR[size];
             if (p) {
                 memset(p, 0, size);
                 va_start(args, f);
+#if WIN32
                 _vsntprintf_s(p, size, size - 1, f.c_str(), args);
+#else
+                vsnprintf(p, size, f.c_str(), args);
+#endif
                 va_end(args);
                 s = p;
                 delete[] p;
@@ -203,8 +291,7 @@ namespace utils {
                 auto suffix_ = suffix.empty() ? string_t::npos : s.find(suffix, prefix_ + prefix.size());
                 if (suffix_ == string_t::npos) {
                     find_.push_back(s.substr(prefix_));
-                }
-                else {
+                } else {
                     find_.push_back(s.substr(prefix_, suffix_ - prefix_ + suffix.size()));
                     prefix_ = s.find(prefix, suffix_ + suffix.size());
                 }
@@ -254,7 +341,7 @@ namespace utils {
 
         inline std::vector<string_t> split(string_t s, string_t delim, bool ignoreEmpty = false) {
             std::vector<string_t> split_;
-            std::replace_if(s.begin(), s.end(), [&](const TCHAR& c) {
+            std::replace_if(s.begin(), s.end(), [&](const TCHAR &c) {
                 return delim.find(c) != string_t::npos;
             }, delim.at(0));
             size_t pos = s.find(delim.at(0));
@@ -295,11 +382,10 @@ namespace utils {
         inline std::vector<string_t> numbers(string_t s) {
             std::vector<string_t> numbers_;
             string_t number;
-            for (auto& e : s) {
+            for (auto &e: s) {
                 if (e >= '0' && e <= '9') {
                     number += e;
-                }
-                else {
+                } else {
                     if (!number.empty()) {
                         numbers_.push_back(number);
                         number.clear();
@@ -314,7 +400,7 @@ namespace utils {
 
         inline int atoi(string_t s) {
             string_t number;
-            for (auto& e : s) {
+            for (auto &e: s) {
                 if (e >= '0' && e <= '9') {
                     number += e;
                 }
@@ -333,8 +419,8 @@ namespace utils {
 
         inline string_t itoa16(int i) {
             std::string s;
-            TCHAR hex[100] = { 0 };
-#ifdef _MSC_VER
+            TCHAR hex[100] = {0};
+#ifdef WIN32
             _sntprintf_s(hex, _countof(hex) - 1, _countof(hex) - 1, _T("%x"), i);
 #else
             snprintf(hex, _countof(hex) - 1, "%x", i);
@@ -345,9 +431,18 @@ namespace utils {
         inline string_t hex(int i) {
             return itoa16(i);
         }
+
+        inline std::string encrypt(std::string &data, std::string &key) {
+            return ::encrypt(data, key);
+        }
+
+        inline std::string decrypt(std::string &data, std::string &key) {
+            return ::decrypt(data, key);
+        }
     }
 
     namespace datetime {
+#ifdef WIN32
         inline string_t now() {
             SYSTEMTIME time = { 0 };
             GetLocalTime(&time);
@@ -356,9 +451,18 @@ namespace utils {
                 time.wYear, time.wMonth, time.wDay, time.wHour, time.wMinute, time.wSecond, time.wMilliseconds);
             return buffer;
         }
+#endif
     }
 
     namespace io {
+        inline bool exists(string_t);
+
+        inline string_t mkdir(const string_t);
+
+        inline string_t directoryPath(string_t);
+
+        inline string_t fileName(string_t);
+
         namespace path {
             inline string_t combine(string_t path1, string_t path2) {
                 string_t s = path1;
@@ -369,7 +473,7 @@ namespace utils {
                 return s;
             }
 
-#ifdef _MSC_VER
+#ifdef WIN32
             inline string_t GetExeFileName() {
                 TCHAR buffer[MAX_PATH] = { 0 };
                 GetModuleFileName(nullptr, buffer, _countof(buffer) - 1);
@@ -403,6 +507,264 @@ namespace utils {
 #endif
         }
 
+        namespace file {
+            inline std::vector<string_t> allLines(string_t path) {
+                std::vector<string_t> lines;
+                std::ifstream in(path);
+                if (in) {
+                    std::string line;
+                    while (getline(in, line)) {
+                        lines.push_back(strings::t2t(line));
+                    }
+                }
+                return lines;
+            }
+
+            inline string_t allText(string_t path) {
+                string_t text;
+                std::ifstream in(path);
+                if (in) {
+                    stringstream_t buffer;
+                    buffer << in.rdbuf();
+                    text = buffer.str();
+                }
+                return text;
+            }
+
+            inline unsigned long long size(string_t path) {
+                return io::exists(path) ? std::filesystem::file_size(path) : -1;
+            }
+
+            inline void append(string_t path, std::string data) {
+                auto access = _T("rb+");
+                if (!io::exists(path)) {
+                    access = _T("wb+");
+                }
+#ifdef WIN32
+                FILE *file = nullptr;
+                _tfopen_s(&file, path.c_str(), access);
+#else
+                auto file = fopen(path.c_str(), access);
+#endif
+                if (file) {
+                    fseek(file, 0, SEEK_END);
+                    fwrite(data.c_str(), sizeof(data.c_str()[0]), data.size(), file);
+                    fclose(file);
+#ifdef WIN32
+                    file = nullptr;
+#endif
+                }
+            }
+
+            inline void write(string_t path, std::string data) {
+                if (io::exists(io::mkdir(io::directoryPath(path)))) {
+#ifdef WIN32
+                    FILE *file = nullptr;
+                    _tfopen_s(&file, path.c_str(), _T("wb+"));
+#else
+                    auto file = fopen(path.c_str(), "wb+");
+#endif
+                    if (file) {
+                        fwrite(data.c_str(), sizeof(data.c_str()[0]), data.size(), file);
+                        fclose(file);
+#ifdef WIN32
+                        file = nullptr;
+#endif
+                    }
+                }
+            }
+
+            inline string_t name(string_t path) {
+                return io::fileName(path);
+            }
+
+            inline void remove(string_t path) {
+                if (io::exists(path)) {
+                    ::remove(strings::t2s(path).c_str());
+                }
+            }
+
+            inline bool copy(string_t src, string_t dst, bool overwrite = false) {
+                auto b = false;
+                if (io::exists(src)) {
+                    if (overwrite && io::exists(dst)) {
+                        remove(dst);
+                    }
+                    std::ifstream src_(src, std::ios::binary);
+                    std::ofstream dst_(dst, std::ios::binary);
+                    dst_ << src_.rdbuf();
+                    src_.close();
+                    dst_.close();
+                    b = true;
+                }
+                return b;
+            }
+
+            inline string_t base64(string_t path) {
+                auto s = string_t();
+                if (io::exists(path)) {
+                    char buffer[8192] = {0};
+                    FILE *file = nullptr;
+#ifdef WIN32
+                    _tfopen_s(&file, logFilePath.c_str(), _T("ab+"));
+#else
+                    file = ::fopen(path.c_str(), _T("rb+"));
+#endif
+                    if (file) {
+                        while (!::feof(file)) {
+                            auto numberOfBytesRead = ::fread(buffer, sizeof(buffer[0]), _countof(buffer), file);
+                            if (numberOfBytesRead > 0) {
+                                s.append(buffer, numberOfBytesRead);
+                            }
+                        }
+                        fclose(file);
+                        file = nullptr;
+                        s = strings::t2t(base64::to_base64(s));
+                    }
+                }
+                return s;
+            }
+
+            inline std::vector<string_t> base64(string_t path, int limit) {
+                auto s = std::vector<string_t>();
+                auto encoded = file::base64(path);
+                if (limit > 0) {
+                    auto p = 0;
+                    while (p < encoded.size()) {
+                        auto snippet = encoded.substr(p, limit);
+                        s.push_back(strings::t2t(snippet));
+                        p += snippet.size();
+                    }
+                } else {
+                    s.push_back(strings::t2t(encoded));
+                }
+                return s;
+            }
+
+            inline void fwrite(string_t __ptr, FILE *__stream) {
+                if (!__ptr.empty() && __stream) {
+                    ::fwrite(__ptr.c_str(), __ptr.size(), sizeof(string_t::value_type), __stream);
+                    ::fflush(__stream);
+                }
+            }
+        }
+
+        namespace directory {
+            inline std::vector<string_t> files(string_t path, bool recursive = true) {
+                std::vector<string_t> files_;
+                if (exists(path)) {
+                    for (const auto &entry: std::filesystem::directory_iterator(path)) {
+#ifdef UNICODE
+                        string_t p = reinterpret_cast<LPCWSTR>(entry.path().u16string().c_str());
+#else
+                        string_t p = entry.path().string();
+#endif
+                        if (entry.is_directory()) {
+                            if (recursive) {
+                                for (auto &file: files(p, recursive)) {
+                                    files_.push_back(file);
+                                }
+                            }
+                        } else {
+                            files_.push_back(p);
+                        }
+                    }
+                }
+                return files_;
+            }
+
+            inline void pack(string_t src, string_t dst = "") {
+                if (io::exists(src)) {
+                    auto hpp = dst;
+                    if (hpp.empty()) {
+                        hpp = _T("auto_gen.hpp");
+                    }
+                    io::file::remove(hpp);
+                    FILE *p = nullptr;
+#ifdef WIN32
+                    _tfopen_s(&file, hpp.c_str(), _T("ab+"));
+#else
+                    p = ::fopen(hpp.c_str(), _T("ab+"));
+#endif
+                    if (p) {
+                        auto files = io::directory::files(src);
+                        io::file::fwrite(_T("#pragma once\n"), p);
+                        io::file::fwrite(_T("#include <string>\n"), p);
+                        io::file::fwrite(_T("namespace auto_gen {\n"), p);
+                        io::file::fwrite(_T("   inline std::string get_base64_chars() {\n"), p);
+                        io::file::fwrite(_T("       static std::string base64_chars = \"ABCDEFGHIJKLMNOPQRSTUVWXYZ\"\n"), p);
+                        io::file::fwrite(_T("                                         \"abcdefghijklmnopqrstuvwxyz\"\n"), p);
+                        io::file::fwrite(_T("                                         \"0123456789+/\";\n"), p);
+                        io::file::fwrite(_T("       return base64_chars;\n"), p);
+                        io::file::fwrite(_T("   }\n"), p);
+                        io::file::fwrite(_T(""), p);
+                        io::file::fwrite(_T("   inline std::string from_base64(std::string const &data) {\n"), p);
+                        io::file::fwrite(_T("       int counter = 0;\n"), p);
+                        io::file::fwrite(_T("       size_t bit_stream = 0;\n"), p);
+                        io::file::fwrite(_T("       std::string decoded;\n"), p);
+                        io::file::fwrite(_T("       size_t offset;\n"), p);
+                        io::file::fwrite(_T("       const std::string base64_chars = get_base64_chars();\n"), p);
+                        io::file::fwrite(_T("       for (unsigned char c : data) {\n"), p);
+                        io::file::fwrite(_T("           auto num_val = base64_chars.find(c);\n"), p);
+                        io::file::fwrite(_T("           if (num_val != std::string::npos) {\n"), p);
+                        io::file::fwrite(_T("               offset = 18 - counter % 4 * 6;\n"), p);
+                        io::file::fwrite(_T("               bit_stream += num_val << offset;\n"), p);
+                        io::file::fwrite(_T("               if (offset == 12) {\n"), p);
+                        io::file::fwrite(_T("                   decoded += static_cast<char>(bit_stream >> 16 & 0xff);\n"), p);
+                        io::file::fwrite(_T("               }\n"), p);
+                        io::file::fwrite(_T("               if (offset == 6) {\n"), p);
+                        io::file::fwrite(_T("                   decoded += static_cast<char>(bit_stream >> 8 & 0xff);\n"), p);
+                        io::file::fwrite(_T("               }\n"), p);
+                        io::file::fwrite(_T("               if (offset == 0 && counter != 4) {\n"), p);
+                        io::file::fwrite(_T("                   decoded += static_cast<char>(bit_stream & 0xff);\n"), p);
+                        io::file::fwrite(_T("                   bit_stream = 0;\n"), p);
+                        io::file::fwrite(_T("               }\n"), p);
+                        io::file::fwrite(_T("           } else if (c != '=') {\n"), p);
+                        io::file::fwrite(_T("               return std::string();\n"), p);
+                        io::file::fwrite(_T("           }\n"), p);
+                        io::file::fwrite(_T("           counter++;\n"), p);
+                        io::file::fwrite(_T("       }\n"), p);
+                        io::file::fwrite(_T("       return decoded;\n"), p);
+                        io::file::fwrite(_T("   }\n"), p);
+                        io::file::fwrite(_T(""), p);
+                        io::file::fwrite(_T("   std::string res(const char* name) {\n"), p);
+                        for (auto &f: files) {
+                            auto name = f.substr(src.size());
+                            io::file::fwrite(strings::format("        if (strcmp(name, \"%s\") == 0) {\n", name.c_str()), p);
+                            auto count = 0;
+                            for (auto &base64: io::file::base64(f, 100)) {
+                                if (count == 0) {
+                                    io::file::fwrite(strings::format("            auto s = \"%s\"", base64.c_str()), p);
+                                } else {
+                                    io::file::fwrite(strings::format("\n                     \"%s\"", base64.c_str()), p);
+                                }
+                                count++;
+                            }
+                            if (count > 0) {
+                                io::file::fwrite(_T(";\n"), p);
+                            }
+                            io::file::fwrite(strings::format("            return from_base64(s);\n", io::fileName(f).c_str()), p);
+                            io::file::fwrite(strings::format("        }\n"), p);
+                        }
+                        io::file::fwrite(_T("        return std::string();\n"), p);
+                        io::file::fwrite(_T("    }\n"), p);
+                        io::file::fwrite(_T("    std::vector<std::string> files() {\n"), p);
+                        io::file::fwrite(_T("        static std::vector<std::string> f;\n"), p);
+                        io::file::fwrite(_T("        if (f.empty()) {\n"), p);
+                        for (auto &f: files) {
+                            auto name = f.substr(src.size());
+                            io::file::fwrite(strings::format(_T("            f.push_back(\"%s\");\n"), name.c_str()), p);
+                        }
+                        io::file::fwrite(_T("        }\n"), p);
+                        io::file::fwrite(_T("        return f;\n"), p);
+                        io::file::fwrite(_T("    }\n"), p);
+                        io::file::fwrite(_T("}\n"), p);
+                        fclose(p);
+                    }
+                }
+            }
+        }
+
         inline bool exists(string_t path) {
             return std::filesystem::exists(path);
         }
@@ -421,7 +783,7 @@ namespace utils {
 #ifdef UNICODE
                             for (auto& directory : directories(entry.path().wstring(), recursive)) {
 #else
-                            for (auto& directory : directories(entry.path().string(), recursive)) {
+                            for (auto &directory: directories(entry.path().string(), recursive)) {
 #endif
                                 directories_.push_back(directory);
                             }
@@ -432,34 +794,11 @@ namespace utils {
             return directories_;
         }
 
-        inline std::vector<string_t> files(string_t path, bool recursive) {
-            std::vector<string_t> files_;
-            if (exists(path)) {
-                for (const auto& entry : std::filesystem::directory_iterator(path)) {
-#ifdef UNICODE
-                    string_t path_ = reinterpret_cast<LPCWSTR>(entry.path().u16string().c_str());
-#else
-                    string_t path_ = entry.path().string();
-#endif
-                    if (entry.is_directory()) {
-                        if (recursive) {
-                            for (auto& file : files(path_, recursive)) {
-                                files_.push_back(file);
-                            }
-                        }
-                    } else {
-                        files_.push_back(path_);
-                    }
-                }
-            }
-            return files_;
-        }
-
         inline string_t mkdir(const string_t path) {
             if (!path.empty()) {
                 string_t::size_type tmp_pos_begin = 0;
                 string_t::size_type tmp_pos;
-#ifdef _MSC_VER
+#ifdef WIN32
                 if (path.find(UNC) == 0) {
                     tmp_pos = path.find(PATH_SEPARATOR, _tcslen(UNC));
                 } else {
@@ -474,7 +813,7 @@ namespace utils {
                         return path;
                     }
                     if (!std::filesystem::exists(tmpdir)) {
-#ifdef _MSC_VER
+#ifdef WIN32
                         ::CreateDirectory(tmpdir.c_str(), nullptr);
 #else
                         ::mkdir(tmpdir.c_str(), S_IRWXU | S_IRWXG | S_IRWXO);
@@ -484,7 +823,7 @@ namespace utils {
                     tmp_pos = path.find(PATH_SEPARATOR, tmp_pos_begin);
                 }
                 if (!std::filesystem::exists(path)) {
-#ifdef _MSC_VER
+#ifdef WIN32
                     ::CreateDirectory(path.c_str(), nullptr);
 #else
                     ::mkdir(path.c_str(), S_IRWXU | S_IRWXG | S_IRWXO);
@@ -514,26 +853,26 @@ namespace utils {
             return fileName_;
         }
 
-        inline string_t fileNameWithoutExtension(string_t path) {
-            string_t fileNameWithoutExtension_ = path;
+        inline string_t GetFileNameWithoutExtension(string_t path) {
+            string_t fileNameWithoutExtension = path;
             auto pos = path.find_last_of(PATH_SEPARATOR);
             if (pos != string_t::npos) {
-                fileNameWithoutExtension_ = fileNameWithoutExtension_.substr(pos + 1);
+                fileNameWithoutExtension = fileNameWithoutExtension.substr(pos + 1);
             }
-            pos = fileNameWithoutExtension_.find_last_of(_T("."));
+            pos = fileNameWithoutExtension.find_last_of(_T("."));
             if (pos != string_t::npos) {
-                fileNameWithoutExtension_ = fileNameWithoutExtension_.substr(0, pos);
+                fileNameWithoutExtension = fileNameWithoutExtension.substr(0, pos);
             }
-            return fileNameWithoutExtension_;
+            return fileNameWithoutExtension;
         }
 
-        inline string_t fileExtensionName(string_t path) {
-            string_t fileExtensionName_;
+        inline string_t GetFileExtensionName(string_t path) {
+            string_t fileExtensionName;
             auto pos = path.find_last_of(_T("."));
             if (pos != string_t::npos) {
-                fileExtensionName_ = path.substr(pos + 1);
+                fileExtensionName = path.substr(pos + 1);
             }
-            return fileExtensionName_;
+            return fileExtensionName;
         }
 
         inline string_t rename(string_t __old, string_t __new) {
@@ -542,96 +881,7 @@ namespace utils {
         }
     }
 
-    namespace file {
-        inline std::vector<string_t> allLines(string_t path) {
-            std::vector<string_t> lines;
-            std::ifstream in(path);
-            if (in) {
-                std::string line;
-                while (getline(in, line)) {
-                    lines.push_back(strings::t2w(line));
-                }
-            }
-            return lines;
-        }
-
-        inline string_t allText(string_t path) {
-            string_t text;
-            std::ifstream in(path);
-            if (in) {
-                stringstream_t buffer;
-                buffer << in.rdbuf();
-                text = buffer.str();
-            }
-            return text;
-        }
-
-        inline unsigned long long size(string_t path) {
-            return io::exists(path) ? std::filesystem::file_size(path) : -1;
-        }
-
-        inline void append(string_t path, std::string data) {
-            auto access = _T("rb+");
-            if (!io::exists(path)) {
-                access = _T("wb+");
-            }
-#ifdef _MSC_VER
-            FILE *file = nullptr;
-            _tfopen_s(&file, path.c_str(), access);
-#else
-            auto file = fopen(path.c_str(), access);
-#endif
-            if (file) {
-                fseek(file, 0, SEEK_END);
-                fwrite(data.c_str(), sizeof(data.c_str()[0]), data.size(), file);
-                fclose(file);
-#ifdef _MSC_VER
-                file = nullptr;
-#endif
-            }
-        }
-
-        inline void write(string_t path, std::string data) {
-            if (io::exists(io::mkdir(io::directoryPath(path)))) {
-#ifdef _MSC_VER
-                FILE *file = nullptr;
-                _tfopen_s(&file, path.c_str(), _T("wb+"));
-#else
-                auto file = fopen(path.c_str(), "wb+");
-#endif
-                if (file) {
-                    fwrite(data.c_str(), sizeof(data.c_str()[0]), data.size(), file);
-                    fclose(file);
-#ifdef _MSC_VER
-                    file = nullptr;
-#endif
-                }
-            }
-        }
-
-        inline string_t name(string_t path) {
-            return io::fileName(path);
-        }
-
-        inline void remove(string_t path) {
-            if (io::exists(path)) {
-                ::remove(strings::t2s(path).c_str());
-            }
-        }
-
-
-        inline void copy(string_t src, string_t dst, bool overwrite = false) {
-            if (overwrite && io::exists(dst)) {
-                remove(dst);
-            }
-            std::ifstream src_(src, std::ios::binary);
-            std::ofstream dst_(dst, std::ios::binary);
-            dst_ << src_.rdbuf();
-            src_.close();
-            dst_.close();
-        }
-    }
-#ifdef _MSC_VER
+#ifdef WIN32
     inline void writeLog(string_t);
 
     inline string_t hash(BYTE* pData, DWORD dwDataLength, ALG_ID algHashType = CALG_MD5) {

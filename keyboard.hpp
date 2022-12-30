@@ -1,11 +1,13 @@
 #include "utils.hpp"
 
-#ifdef _MSC_VER
+#ifdef WIN32
+#define isKeyDown(vKey) ((GetAsyncKeyState(vKey) & 0x8000) ? 1:0)
+#define KEY_COUNT (256)
+#define PRINT_VK(VK) if (i == (VK)) { line = _T(" { ") _T(#VK) _T(" } "); printed = true; }
+
 namespace utils {
     namespace device {
         namespace keyboard {
-#define isKeyDown(vKey) ((GetAsyncKeyState(vKey) & 0x8000) ? 1:0)
-#define KEY_COUNT (256)
             inline void record(string_t journalFilePath, int inputIdleTimeout, int pollingMilliseconds) {
                 if (!journalFilePath.empty()) {
                     FILE* file = nullptr;
@@ -39,7 +41,6 @@ namespace utils {
                                             line = _T(".");
                                         }
                                         else {
-#define PRINT_VK(VK) if (i == (VK)) { line = _T(" { ") _T(#VK) _T(" } "); printed = true; }
                                             bool printed = false;
                                             PRINT_VK(VK_LBUTTON);
                                             PRINT_VK(VK_RBUTTON);
@@ -236,7 +237,6 @@ namespace utils {
                                             PRINT_VK(VK_PA1);
                                             PRINT_VK(VK_OEM_CLEAR);
                                             PRINT_VK(VK_LCONTROL);
-#undef PRINT_VK
                                             if (!printed) {
                                                 line = strings::format(_T("0x%02x"), i);
                                             }
