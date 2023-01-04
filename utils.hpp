@@ -15,18 +15,11 @@
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
+#include <sys/stat.h>
+#include <sstream>
+#include <codecvt>
 #include "./easy-encryption/encrypt.h"
 #include "./base64/base64.hpp"
-
-#ifdef JSON_SUPPORT
-#include "nlohmann/json/3.11.2+/json.hpp"
-#define JSON_INT(json, key) (json.contains(key) && json[key].is_number() ? json[key].get<int>() : 0)
-#define JSON_STRING(json, key) (json.contains(key) && json[key].is_string() ? json[key].get<std::string>() : std::string())
-#endif
-
-#ifdef CPPHTTPLIB_HTTPLIB_SUPPORT
-#include "httpLib.hpp"
-#endif
 
 #ifdef WIN32
 #include <iostream>
@@ -42,11 +35,6 @@
 #pragma comment(lib, "comsuppw.lib")
 #pragma comment(lib, "shlwapi.lib")
 #else
-
-#include <sys/stat.h>
-#include <sstream>
-#include <codecvt>
-
 #define _T(x) x
 #define TCHAR char
 #define _countof(x) (sizeof(x) / sizeof(x[0]))
@@ -64,8 +52,10 @@
 
 #ifdef WIN32
 #define PATH_SEPARATOR _T('\\')
+#define PATH_SEPARATOR_STRING _T("\\")
 #else
 #define PATH_SEPARATOR _T('/')
+#define PATH_SEPARATOR_STRING _T("\\")
 #endif
 
 #define CR _T("\r")
@@ -80,23 +70,23 @@ namespace utils {
                 size_t begin = 0;
 #ifdef WIN32
                 int size = 0;
-                pos = str.find(static_cast<char>(0), begin);
+                pos = s.find(static_cast<char>(0), begin);
                 while (pos != std::string::npos) {
-                    auto segment = std::string(&str[begin], pos - begin);
+                    auto segment = std::string(&s[begin], pos - begin);
                     auto converted = std::wstring(segment.size() + 1, 0);
                     size = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, &segment[0], segment.size(), &converted[0], converted.length());
                     converted.resize(size);
-                    ret.append(converted);
-                    ret.append({ 0 });
+                    w.append(converted);
+                    w.append({ 0 });
                     begin = pos + 1;
-                    pos = str.find(static_cast<char>(0), begin);
+                    pos = s.find(static_cast<char>(0), begin);
                 }
-                if (begin < str.length()) {
-                    auto segment = std::string(&str[begin], str.length() - begin);
+                if (begin < s.length()) {
+                    auto segment = std::string(&s[begin], s.length() - begin);
                     auto converted = std::wstring(segment.size() + 1, 0);
                     size = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, segment.c_str(), segment.size(), &converted[0], converted.length());
                     converted.resize(size);
-                    ret.append(converted);
+                    w.append(converted);
                 }
 #else
                 size_t size;
@@ -132,9 +122,13 @@ namespace utils {
         }
 
         inline std::string t2s(const std::wstring &s) {
+#ifdef WIN32
+            return (char*)_bstr_t(s.c_str());
+#else
             // https://stackoverflow.com/questions/11512656/how-to-print-c-wstring-utf-8-characters-to-mac-os-or-unix-terminal
             std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t> convert;
             return convert.to_bytes(s);
+#endif
         }
 
         inline string_t t2t(const std::string &s) {
@@ -154,13 +148,11 @@ namespace utils {
         }
 
 #ifdef WIN32
+#if 0
         inline std::wstring t2w(const std::string s) {
             return (wchar_t*)_bstr_t(s.c_str());
         }
-
-        inline std::string t2s(const std::wstring& s) {
-            return (char*)_bstr_t(s.c_str());
-        }
+#endif
 
         inline std::string u2s(const std::string utf8) {
             std::string s;
@@ -236,6 +228,30 @@ namespace utils {
             return s;
         }
 
+        inline string_t replace(string_t s, const TCHAR target, const TCHAR replacement, bool replace_first = 0, bool replace_empty = 0) {
+            string_t target_;
+            target_.push_back(target);
+
+            string_t replacement_;
+            replacement_.push_back(replacement);
+
+            return replace(s, target_, replacement_, replace_first, replace_empty);
+        }
+
+        inline string_t replace(string_t s, const string_t target, const TCHAR replacement, bool replace_first = 0, bool replace_empty = 0) {
+            string_t replacement_;
+            replacement_.push_back(replacement);
+
+            return replace(s, target, replacement_, replace_first, replace_empty);
+        }
+
+        inline string_t replace(string_t s, const TCHAR target, const string_t replacement, bool replace_first = 0, bool replace_empty = 0) {
+            string_t target_;
+            target_.push_back(target);
+
+            return replace(s, target_, replacement, replace_first, replace_empty);
+        }
+
         inline string_t format(string_t f, ...) {
             string_t s;
             va_list args;
@@ -265,15 +281,15 @@ namespace utils {
         }
 
         inline string_t lower(string_t s) {
-            string_t copy = s;
-            std::transform(copy.begin(), copy.end(), copy.begin(), ::tolower);
-            return copy;
+            string_t lower = s;
+            std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
+            return lower;
         }
 
         inline string_t upper(string_t s) {
-            string_t copy = s;
-            std::transform(copy.begin(), copy.end(), copy.begin(), ::toupper);
-            return copy;
+            string_t upper = s;
+            std::transform(upper.begin(), upper.end(), upper.begin(), ::toupper);
+            return upper;
         }
 
         inline bool startsWith(string_t s, string_t find) {
@@ -330,10 +346,10 @@ namespace utils {
 
         inline string_t trim(const string_t s) {
             auto trim_ = s;
-            while (!trim_.empty() && trim_.at(0) == ' ') {
+            while (!trim_.empty() && trim_.at(0) == _T(' ')) {
                 trim_ = trim_.substr(1);
             }
-            while (!trim_.empty() && trim_.at(trim_.size() - 1) == ' ') {
+            while (!trim_.empty() && trim_.at(trim_.size() - 1) == _T(' ')) {
                 trim_ = trim_.substr(0, trim_.size() - 1);
             }
             return trim_;
@@ -433,11 +449,11 @@ namespace utils {
         }
 
         inline std::string encrypt(std::string &data, std::string &key) {
-            return ::encrypt(data, key);
+            return easy_encryption::encrypt(data, key);
         }
 
         inline std::string decrypt(std::string &data, std::string &key) {
-            return ::decrypt(data, key);
+            return easy_encryption::decrypt(data, key);
         }
     }
 
@@ -455,9 +471,11 @@ namespace utils {
     }
 
     namespace io {
-        inline bool exists(string_t);
+        namespace directory {
+            inline string_t mkdir(const string_t);
+        }
 
-        inline string_t mkdir(const string_t);
+        inline bool exists(string_t);
 
         inline string_t directoryPath(string_t);
 
@@ -467,7 +485,9 @@ namespace utils {
             inline string_t combine(string_t path1, string_t path2) {
                 string_t s = path1;
                 if (!s.empty() && s.at(s.size() - 1) != PATH_SEPARATOR) {
-                    s += PATH_SEPARATOR;
+                    if (path2.empty() || path2.at(0) != PATH_SEPARATOR) {
+                        s += PATH_SEPARATOR;
+                    }
                 }
                 s += path2;
                 return s;
@@ -505,6 +525,41 @@ namespace utils {
                 return exe;
             }
 #endif
+
+            inline string_t GetFileName(string_t path) {
+                string_t fileName;
+                auto pos = path.find_last_of(PATH_SEPARATOR);
+                if (pos != string_t::npos) {
+                    fileName = path.substr(pos + 1);
+                }
+                return fileName;
+            }
+
+            inline string_t GetDirectoryPath(string_t path) {
+                string_t fileName;
+                auto pos = path.find_last_of(PATH_SEPARATOR);
+                if (pos != string_t::npos) {
+                    fileName = path.substr(0, pos);
+                }
+                return fileName;
+            }
+
+            inline string_t GetWorkingDirectory() {
+                TCHAR buffer[MAX_PATH] = { 0 };
+                GetModuleFileName(nullptr, buffer, _countof(buffer) - 1);
+                string_t directory = buffer;
+                auto pos = directory.find_last_of(PATH_SEPARATOR);
+                if (pos != string_t::npos) {
+                    directory = directory.substr(0, pos);
+                }
+                return directory;
+            }
+
+            inline string_t GetSpecialFolderPath(string_t path) {
+                char buffer[MAX_PATH] = { 0 };
+                SHGetSpecialFolderPath(0, buffer, CSIDL_PERSONAL, false);
+                return io::path::combine(buffer, path);
+            }
         }
 
         namespace file {
@@ -557,7 +612,7 @@ namespace utils {
             }
 
             inline void write(string_t path, std::string data) {
-                if (io::exists(io::mkdir(io::directoryPath(path)))) {
+                if (io::exists(io::directory::mkdir(io::directoryPath(path)))) {
 #ifdef WIN32
                     FILE *file = nullptr;
                     _tfopen_s(&file, path.c_str(), _T("wb+"));
@@ -606,7 +661,7 @@ namespace utils {
                     char buffer[8192] = {0};
                     FILE *file = nullptr;
 #ifdef WIN32
-                    _tfopen_s(&file, logFilePath.c_str(), _T("ab+"));
+                    _tfopen_s(&file, path.c_str(), _T("rb+"));
 #else
                     file = ::fopen(path.c_str(), _T("rb+"));
 #endif
@@ -629,7 +684,7 @@ namespace utils {
                 auto s = std::vector<string_t>();
                 auto encoded = file::base64(path);
                 if (limit > 0) {
-                    auto p = 0;
+                    auto p = (size_t)0;
                     while (p < encoded.size()) {
                         auto snippet = encoded.substr(p, limit);
                         s.push_back(strings::t2t(snippet));
@@ -647,6 +702,12 @@ namespace utils {
                     ::fflush(__stream);
                 }
             }
+
+#ifdef WIN32
+            inline bool exists(string_t path) {
+                return PathFileExists(path.c_str()) && !PathIsDirectory(path.c_str());
+            }
+#endif
         }
 
         namespace directory {
@@ -682,7 +743,7 @@ namespace utils {
                     io::file::remove(hpp);
                     FILE *p = nullptr;
 #ifdef WIN32
-                    _tfopen_s(&file, hpp.c_str(), _T("ab+"));
+                    _tfopen_s(&p, hpp.c_str(), _T("ab+"));
 #else
                     p = ::fopen(hpp.c_str(), _T("ab+"));
 #endif
@@ -763,6 +824,46 @@ namespace utils {
                     }
                 }
             }
+
+            inline string_t mkdir(const string_t path) {
+                if (!path.empty()) {
+                    string_t::size_type tmp_pos_begin = 0;
+                    string_t::size_type tmp_pos;
+#ifdef WIN32
+                    if (path.find(UNC) == 0) {
+                        tmp_pos = path.find(PATH_SEPARATOR, _tcslen(UNC));
+                    }
+                    else {
+                        tmp_pos = path.find(PATH_SEPARATOR, tmp_pos_begin);
+                    }
+#else
+                    tmp_pos = path.find(PATH_SEPARATOR, tmp_pos_begin);
+#endif
+                    while (tmp_pos != path.npos) {
+                        string_t tmpdir = path.substr(0, tmp_pos);
+                        if (tmpdir.empty()) {
+                            return path;
+                        }
+                        if (!std::filesystem::exists(tmpdir)) {
+#ifdef WIN32
+                            ::CreateDirectory(tmpdir.c_str(), nullptr);
+#else
+                            ::mkdir(tmpdir.c_str(), S_IRWXU | S_IRWXG | S_IRWXO);
+#endif
+                        }
+                        tmp_pos_begin = tmp_pos + 1;
+                        tmp_pos = path.find(PATH_SEPARATOR, tmp_pos_begin);
+                    }
+                    if (!std::filesystem::exists(path)) {
+#ifdef WIN32
+                        ::CreateDirectory(path.c_str(), nullptr);
+#else
+                        ::mkdir(path.c_str(), S_IRWXU | S_IRWXG | S_IRWXO);
+#endif
+                    }
+                }
+                return path;
+            }
         }
 
         inline bool exists(string_t path) {
@@ -792,45 +893,6 @@ namespace utils {
                 }
             }
             return directories_;
-        }
-
-        inline string_t mkdir(const string_t path) {
-            if (!path.empty()) {
-                string_t::size_type tmp_pos_begin = 0;
-                string_t::size_type tmp_pos;
-#ifdef WIN32
-                if (path.find(UNC) == 0) {
-                    tmp_pos = path.find(PATH_SEPARATOR, _tcslen(UNC));
-                } else {
-                    tmp_pos = path.find(PATH_SEPARATOR, tmp_pos_begin);
-                }
-#else
-                tmp_pos = path.find(PATH_SEPARATOR, tmp_pos_begin);
-#endif
-                while (tmp_pos != path.npos) {
-                    string_t tmpdir = path.substr(0, tmp_pos);
-                    if (tmpdir.empty()) {
-                        return path;
-                    }
-                    if (!std::filesystem::exists(tmpdir)) {
-#ifdef WIN32
-                        ::CreateDirectory(tmpdir.c_str(), nullptr);
-#else
-                        ::mkdir(tmpdir.c_str(), S_IRWXU | S_IRWXG | S_IRWXO);
-#endif
-                    }
-                    tmp_pos_begin = tmp_pos + 1;
-                    tmp_pos = path.find(PATH_SEPARATOR, tmp_pos_begin);
-                }
-                if (!std::filesystem::exists(path)) {
-#ifdef WIN32
-                    ::CreateDirectory(path.c_str(), nullptr);
-#else
-                    ::mkdir(path.c_str(), S_IRWXU | S_IRWXG | S_IRWXO);
-#endif
-                }
-            }
-            return path;
         }
 
         inline string_t directoryPath(string_t path) {
@@ -915,115 +977,90 @@ namespace utils {
         return hash_;
     }
 
-    inline string_t GetFileName(string_t path) {
-        string_t fileName;
-        auto pos = path.find(_T("\\"));
-        if (pos != string_t::npos) {
-            fileName = path.substr(pos + 1);
-        }
-        return fileName;
-    }
-
-    inline string_t GetDirectoryPath(string_t path) {
-        string_t fileName;
-        auto pos = path.find_last_of(_T("\\"));
-        if (pos != string_t::npos) {
-            fileName = path.substr(0, pos);
-        }
-        return fileName;
-    }
-
-    inline string_t GetWorkingDirectory() {
-        TCHAR buffer[MAX_PATH] = { 0 };
-        GetModuleFileName(nullptr, buffer, _countof(buffer) - 1);
-        string_t directory = buffer;
-        auto pos = directory.find_last_of(PATH_SEPARATOR);
-        if (pos != string_t::npos) {
-            directory = directory.substr(0, pos);
-        }
-        return directory;
-    }
-
-    struct CONSOLE_TEXT {
-        string_t text;
-        WORD color;
-        CONSOLE_TEXT() {
-            this->color = FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_RED;
-        }
-
-        CONSOLE_TEXT(string_t text) {
-            this->text = text;
-            this->color = FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_RED;
-        }
-
-        CONSOLE_TEXT(string_t text, WORD color) {
-            this->text = text;
-            this->color = color;
-        }
-    };
-
-    static LPCRITICAL_SECTION pCriticalSection = nullptr;
-    inline LPCRITICAL_SECTION GetCriticalSection() {
-        if (!pCriticalSection) {
-            pCriticalSection = new CRITICAL_SECTION();
-            InitializeCriticalSection(pCriticalSection);
-        }
-        return pCriticalSection;
-    }
-
-    inline void println(std::vector<CONSOLE_TEXT> words, bool crlf = true) {
-        static HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
-        if (hConsole != INVALID_HANDLE_VALUE) {
-            EnterCriticalSection(GetCriticalSection());
-            SetConsoleTextAttribute(hConsole, FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_RED);
-
-            string_t line;
-            auto datetime = strings::format(_T("[%s] "), datetime::now().c_str());
-            _tprintf(_T("%s"), datetime.c_str());
-            line += datetime;
-
-            for (auto& w : words) {
-                SetConsoleTextAttribute(hConsole, w.color);
-                _tprintf(_T("%s"), w.text.c_str());
-                line += w.text;
+    namespace threading {
+        static LPCRITICAL_SECTION pCriticalSection = nullptr;
+        inline LPCRITICAL_SECTION GetCriticalSection() {
+            if (!pCriticalSection) {
+                pCriticalSection = new CRITICAL_SECTION();
+                InitializeCriticalSection(pCriticalSection);
             }
-            if (crlf) {
-                _tprintf(_T("\n"));
-                line += _T("\n");
-            }
-            writeLog(line);
-            LeaveCriticalSection(GetCriticalSection());
+            return pCriticalSection;
         }
     }
 
-    inline void println(string_t text) {
-        std::vector<CONSOLE_TEXT> v;
-        v.push_back(CONSOLE_TEXT(text));
-        println(v);
-    }
+    namespace console {
+        struct CONSOLE_TEXT {
+            string_t text;
+            WORD color;
+            CONSOLE_TEXT() {
+                this->color = FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_RED;
+            }
 
-    inline void println(string_t text, WORD color) {
-        std::vector<CONSOLE_TEXT> v;
-        v.push_back(CONSOLE_TEXT(text, color));
-        println(v);
-    }
+            CONSOLE_TEXT(string_t text) {
+                this->text = text;
+                this->color = FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_RED;
+            }
 
-    inline void print(string_t text, WORD color) {
-        std::vector<CONSOLE_TEXT> v;
-        v.push_back(CONSOLE_TEXT(text, color));
-        println(v, false);
-    }
+            CONSOLE_TEXT(string_t text, WORD color) {
+                this->text = text;
+                this->color = color;
+            }
+        };
 
-    inline void print_red(string_t text) {
-        print(text, FOREGROUND_RED | FOREGROUND_INTENSITY);
-    }
+        inline void println(std::vector<CONSOLE_TEXT> words, bool crlf = true) {
+            static HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+            if (hConsole != INVALID_HANDLE_VALUE) {
+                EnterCriticalSection(utils::threading::GetCriticalSection());
+                SetConsoleTextAttribute(hConsole, FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_RED);
 
-    inline void print_green(string_t text) {
-        print(text, FOREGROUND_GREEN | FOREGROUND_INTENSITY);
-    }
+                string_t line;
+                auto datetime = strings::format(_T("[%s] "), datetime::now().c_str());
+                _tprintf(_T("%s"), datetime.c_str());
+                line += datetime;
 
-    inline void print_blue(string_t text) {
-        print(text, FOREGROUND_BLUE | FOREGROUND_INTENSITY);
+                for (auto& w : words) {
+                    SetConsoleTextAttribute(hConsole, w.color);
+                    _tprintf(_T("%s"), w.text.c_str());
+                    line += w.text;
+                }
+                if (crlf) {
+                    _tprintf(_T("\n"));
+                    line += _T("\n");
+                }
+                writeLog(line);
+                LeaveCriticalSection(utils::threading::GetCriticalSection());
+            }
+        }
+
+        inline void println(string_t text) {
+            std::vector<CONSOLE_TEXT> v;
+            v.push_back(CONSOLE_TEXT(text));
+            println(v);
+        }
+
+        inline void println(string_t text, WORD color) {
+            std::vector<CONSOLE_TEXT> v;
+            v.push_back(CONSOLE_TEXT(text, color));
+            println(v);
+        }
+
+        inline void print(string_t text, WORD color) {
+            std::vector<CONSOLE_TEXT> v;
+            v.push_back(CONSOLE_TEXT(text, color));
+            println(v, false);
+        }
+
+        inline void print_red(string_t text) {
+            print(text, FOREGROUND_RED | FOREGROUND_INTENSITY);
+        }
+
+        inline void print_green(string_t text) {
+            print(text, FOREGROUND_GREEN | FOREGROUND_INTENSITY);
+        }
+
+        inline void print_blue(string_t text) {
+            print(text, FOREGROUND_BLUE | FOREGROUND_INTENSITY);
+        }
     }
 
     inline void writeLog(string_t log) {
@@ -1048,7 +1085,32 @@ namespace utils {
     }
 #endif
 }
+#ifdef JSON_SUPPORT
+#include "nlohmann/json/3.11.2+/json.hpp"
+#define JSON_INT(json, key) (json.contains(key) && json[key].is_number() ? json[key].get<int>() : 0)
+#define JSON_STRING(json, key) (json.contains(key) && json[key].is_string() ? json[key].get<std::string>() : std::string())
+#endif
+
+#ifdef CPPHTTPLIB_HTTPLIB_SUPPORT
+#include "httpLib.hpp"
+#endif
 
 #ifdef KEYBOARD_SUPPORT
 #include "keyboard.hpp"
 #endif
+
+namespace utils {
+    class __init {
+    public:
+        __init() {
+#ifdef CPPHTTPLIB_HTTPLIB_SUPPORT
+            httplib::__init();
+#endif
+        }
+
+        ~__init() {
+
+        }
+    };
+    static class __init __init;
+}

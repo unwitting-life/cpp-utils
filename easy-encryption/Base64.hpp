@@ -7,7 +7,7 @@
 #define BASE64_TAIL ('=')
 static std::string cvt = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
-namespace base64__ {
+namespace easy_encryption {
     inline std::string encode(const std::vector<char> &data) {
         std::string::size_type i;
         char c;
@@ -89,7 +89,7 @@ namespace base64__ {
         fBytes.pop_back();
         in.close();
 
-        return base64__::encode(fBytes);
+        return easy_encryption::encode(fBytes);
     }
 
     inline void decodeToFile(const std::string &outFileName, const std::string &encodedString) {
@@ -98,7 +98,7 @@ namespace base64__ {
         if (!out.good()) {
             throw std::invalid_argument(std::string("can't open file ") + outFileName);
         }
-        std::vector<char> bytes = base64__::decode(encodedString);
+        std::vector<char> bytes = easy_encryption::decode(encodedString);
         for (unsigned int i = 0; i < bytes.size(); ++i)
             out.put(bytes[i]);
         out.close();
