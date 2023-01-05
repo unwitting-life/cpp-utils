@@ -1,65 +1,5 @@
 ﻿#pragma once
-#ifdef _MSC_VER
-#ifndef WIN32
-#define WIN32
-#endif
-
-#define _WINSOCKAPI_    // stops windows.h including winsock.h
-#include <windows.h>
-#endif
-
-#include <vector>
-#include <fstream>
-#include <string>
-#include <iostream>
-#include <cstdio>
-#include <cstring>
-#include <filesystem>
-#include <sys/stat.h>
-#include <sstream>
-#include <codecvt>
-#include "./easy-encryption/encrypt.h"
-#include "./base64/base64.hpp"
-
-#ifdef WIN32
-#include <iostream>
-#include <stdio.h>
-#include <conio.h>
-#include <iostream>
-#include <direct.h>
-#include <io.h>
-#include <shlobj_core.h>
-#include <Shlwapi.h>
-#include <comutil.h>  
-#include <tchar.h>
-#pragma comment(lib, "comsuppw.lib")
-#pragma comment(lib, "shlwapi.lib")
-#else
-#define _T(x) x
-#define TCHAR char
-#define _countof(x) (sizeof(x) / sizeof(x[0]))
-#endif
-
-#ifdef UNICODE
-#define UNC LR"(\\)"
-#define string_t std::wstring
-#define stringstream_t std::wstringstream
-#else
-#define UNC R"(\\)"
-#define string_t std::string
-#define stringstream_t std::stringstream
-#endif
-
-#ifdef WIN32
-#define PATH_SEPARATOR _T('\\')
-#define PATH_SEPARATOR_STRING _T("\\")
-#else
-#define PATH_SEPARATOR _T('/')
-#define PATH_SEPARATOR_STRING _T("\\")
-#endif
-
-#define CR _T("\r")
-#define LF _T("\n")
+#include "utils.h"
 
 namespace utils {
     namespace strings {
@@ -148,12 +88,6 @@ namespace utils {
         }
 
 #ifdef WIN32
-#if 0
-        inline std::wstring t2w(const std::string s) {
-            return (wchar_t*)_bstr_t(s.c_str());
-        }
-#endif
-
         inline std::string u2s(const std::string utf8) {
             std::string s;
 
@@ -470,27 +404,30 @@ namespace utils {
 #endif
     }
 
-    namespace io {
-        namespace directory {
-            inline string_t mkdir(const string_t);
+    namespace io {        
+        inline bool exists(string_t path) {
+            return io::directory::exists(path) || io::file::exists(path);
         }
 
-        inline bool exists(string_t);
-
-        inline string_t directoryPath(string_t);
-
-        inline string_t fileName(string_t);
-
+        inline void remove(string_t path) {
+            if (io::directory::exists(path)) {
+                io::directory::remove(path);
+            }
+            if (io::file::exists(path)) {
+                io::file::remove(path);
+            }
+        }
         namespace path {
             inline string_t combine(string_t path1, string_t path2) {
-                string_t s = path1;
-                if (!s.empty() && s.at(s.size() - 1) != PATH_SEPARATOR) {
-                    if (path2.empty() || path2.at(0) != PATH_SEPARATOR) {
-                        s += PATH_SEPARATOR;
+                string_t s1 = strings::replace(path1, "/", PATH_SEPARATOR);
+                string_t s2 = strings::replace(path2, "/", PATH_SEPARATOR);
+                if (!s1.empty() && s1.at(s1.size() - 1) != PATH_SEPARATOR) {
+                    if (s2.empty() || s2.at(0) != PATH_SEPARATOR) {
+                        s1 += PATH_SEPARATOR;
                     }
                 }
-                s += path2;
-                return s;
+                s1 += s2;
+                return s1;
             }
 
 #ifdef WIN32
@@ -528,20 +465,32 @@ namespace utils {
 
             inline string_t GetFileName(string_t path) {
                 string_t fileName;
-                auto pos = path.find_last_of(PATH_SEPARATOR);
+                string_t path_ = strings::replace(path, "/", PATH_SEPARATOR);
+                auto pos = path_.find_last_of(PATH_SEPARATOR);
                 if (pos != string_t::npos) {
-                    fileName = path.substr(pos + 1);
+                    fileName = path_.substr(pos + 1);
                 }
                 return fileName;
             }
 
             inline string_t GetDirectoryPath(string_t path) {
-                string_t fileName;
-                auto pos = path.find_last_of(PATH_SEPARATOR);
+                string_t directoryPath;
+                string_t path_ = strings::replace(path, "/", PATH_SEPARATOR);
+                auto pos = path_.find_last_of(PATH_SEPARATOR);
                 if (pos != string_t::npos) {
-                    fileName = path.substr(0, pos);
+                    directoryPath = path_.substr(0, pos);
                 }
-                return fileName;
+                return directoryPath;
+            }
+
+            inline string_t GetDirectoryName(string_t path) {
+                string_t path_ = strings::replace(path, "/", PATH_SEPARATOR);
+                string_t directoryName = GetDirectoryPath(path_);
+                auto pos = directoryName.find_last_of(PATH_SEPARATOR);
+                if (pos != string_t::npos) {
+                    directoryName = path_.substr(0, pos);
+                }
+                return directoryName;
             }
 
             inline string_t GetWorkingDirectory() {
@@ -587,12 +536,12 @@ namespace utils {
             }
 
             inline unsigned long long size(string_t path) {
-                return io::exists(path) ? std::filesystem::file_size(path) : -1;
+                return io::file::exists(path) ? std::filesystem::file_size(path) : -1;
             }
 
             inline void append(string_t path, std::string data) {
                 auto access = _T("rb+");
-                if (!io::exists(path)) {
+                if (!io::file::exists(path)) {
                     access = _T("wb+");
                 }
 #ifdef WIN32
@@ -612,7 +561,7 @@ namespace utils {
             }
 
             inline void write(string_t path, std::string data) {
-                if (io::exists(io::directory::mkdir(io::directoryPath(path)))) {
+                if (io::directory::exists(io::directory::mkdir(io::directoryPath(path)))) {
 #ifdef WIN32
                     FILE *file = nullptr;
                     _tfopen_s(&file, path.c_str(), _T("wb+"));
@@ -633,16 +582,18 @@ namespace utils {
                 return io::fileName(path);
             }
 
-            inline void remove(string_t path) {
-                if (io::exists(path)) {
-                    ::remove(strings::t2s(path).c_str());
+            inline bool remove(string_t path) {
+                auto b = false;
+                if (io::file::exists(path)) {
+                    b = std::filesystem::remove(path);
                 }
+                return b;
             }
 
             inline bool copy(string_t src, string_t dst, bool overwrite = false) {
                 auto b = false;
-                if (io::exists(src)) {
-                    if (overwrite && io::exists(dst)) {
+                if (io::file::exists(src)) {
+                    if (overwrite && io::file::exists(dst)) {
                         remove(dst);
                     }
                     std::ifstream src_(src, std::ios::binary);
@@ -657,7 +608,7 @@ namespace utils {
 
             inline string_t base64(string_t path) {
                 auto s = string_t();
-                if (io::exists(path)) {
+                if (io::file::exists(path)) {
                     char buffer[8192] = {0};
                     FILE *file = nullptr;
 #ifdef WIN32
@@ -703,11 +654,9 @@ namespace utils {
                 }
             }
 
-#ifdef WIN32
             inline bool exists(string_t path) {
-                return PathFileExists(path.c_str()) && !PathIsDirectory(path.c_str());
+                return std::filesystem::exists(path) && !std::filesystem::is_directory(path);
             }
-#endif
         }
 
         namespace directory {
@@ -735,7 +684,7 @@ namespace utils {
             }
 
             inline void pack(string_t src, string_t dst = "") {
-                if (io::exists(src)) {
+                if (io::directory::exists(src)) {
                     auto hpp = dst;
                     if (hpp.empty()) {
                         hpp = _T("auto_gen.hpp");
@@ -864,15 +813,23 @@ namespace utils {
                 }
                 return path;
             }
+
+            inline bool exists(string_t path) {
+                return std::filesystem::exists(path) && std::filesystem::is_directory(path);
+            }
+
+            inline bool is_directory(string_t path) {
+                return exists(path);
+            }
+
+            inline uintmax_t remove(string_t path, bool recursive) {
+                return recursive ? std::filesystem::remove_all(path) : (std::filesystem::remove(path) ? 1 : 0);
+            }
         }
 
-        inline bool exists(string_t path) {
-            return std::filesystem::exists(path);
-        }
-
-        inline std::vector<string_t> directories(string_t path, bool recursive = false) {
+        inline std::vector<string_t> GetDirectories(string_t path, bool recursive = false) {
             std::vector<string_t> directories_;
-            if (exists(path)) {
+            if (directory::exists(path)) {
                 for (const auto &entry: std::filesystem::directory_iterator(path)) {
                     if (entry.is_directory()) {
 #ifdef UNICODE
@@ -882,9 +839,9 @@ namespace utils {
 #endif
                         if (recursive) {
 #ifdef UNICODE
-                            for (auto& directory : directories(entry.path().wstring(), recursive)) {
+                            for (auto& directory : GetDirectories(entry.path().wstring(), recursive)) {
 #else
-                            for (auto &directory: directories(entry.path().string(), recursive)) {
+                            for (auto& directory : GetDirectories(entry.path().string(), recursive)) {
 #endif
                                 directories_.push_back(directory);
                             }
@@ -944,8 +901,6 @@ namespace utils {
     }
 
 #ifdef WIN32
-    inline void writeLog(string_t);
-
     inline string_t hash(BYTE* pData, DWORD dwDataLength, ALG_ID algHashType = CALG_MD5) {
         string_t hash_;
         HCRYPTPROV hCryptProv = NULL;
@@ -1017,7 +972,6 @@ namespace utils {
                 auto datetime = strings::format(_T("[%s] "), datetime::now().c_str());
                 _tprintf(_T("%s"), datetime.c_str());
                 line += datetime;
-
                 for (auto& w : words) {
                     SetConsoleTextAttribute(hConsole, w.color);
                     _tprintf(_T("%s"), w.text.c_str());
@@ -1027,7 +981,7 @@ namespace utils {
                     _tprintf(_T("\n"));
                     line += _T("\n");
                 }
-                writeLog(line);
+                log::write(line);
                 LeaveCriticalSection(utils::threading::GetCriticalSection());
             }
         }
@@ -1063,25 +1017,29 @@ namespace utils {
         }
     }
 
-    inline void writeLog(string_t log) {
-        TCHAR buffer[MAX_PATH] = { 0 };
-        GetModuleFileName(nullptr, buffer, _countof(buffer) - 1);
-        auto logFilePath = string_t(buffer);
-        auto pos = logFilePath.find_last_of('.');
-        if (pos != string_t::npos) {
-            logFilePath = logFilePath.substr(0, pos);
+    namespace log {
+#ifdef WIN32
+        inline void write(string_t log) {
+            TCHAR buffer[MAX_PATH] = { 0 };
+            GetModuleFileName(nullptr, buffer, _countof(buffer) - 1);
+            auto logFilePath = string_t(buffer);
+            auto pos = logFilePath.find_last_of('.');
+            if (pos != string_t::npos) {
+                logFilePath = logFilePath.substr(0, pos);
+            }
+            logFilePath += _T(".log");
+            FILE* file = nullptr;
+            _tfopen_s(&file, logFilePath.c_str(), _T("ab+"));
+            if (file) {
+                fseek(file, 0, SEEK_END);
+                std::string text;
+                text = strings::t2s(log);
+                fwrite(log.c_str(), sizeof(log.c_str()[0]), log.size(), file);
+                fclose(file);
+                file = nullptr;
+            }
         }
-        logFilePath += _T(".log");
-        FILE* file = nullptr;
-        _tfopen_s(&file, logFilePath.c_str(), _T("ab+"));
-        if (file) {
-            fseek(file, 0, SEEK_END);
-            std::string text;
-            text = strings::t2s(log);
-            fwrite(log.c_str(), sizeof(log.c_str()[0]), log.size(), file);
-            fclose(file);
-            file = nullptr;
-        }
+#endif
     }
 #endif
 }
