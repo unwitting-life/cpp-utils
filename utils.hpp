@@ -53,15 +53,20 @@ namespace utils {
             return w;
         }
 
-        inline std::wstring t2w(const std::wstring &s) {
+        inline std::wstring t2w(std::wstring s) {
             return s;
         }
 
-        inline std::string t2s(const std::string &s) {
+        inline std::string t2s(std::string s) {
             return s;
         }
 
-        inline std::string t2s(const std::wstring &s) {
+        inline std::string t2s(std::wstring s) {
+            // error C4996 : 'std::codecvt_utf8<wchar_t,1114111,(std::codecvt_mode)0>' : warning STL4017 : std::wbuffer_convert, std::wstring_convert,
+            // and the <codecvt> header(containing std::codecvt_mode, std::codecvt_utf8, std::codecvt_utf16, and std::codecvt_utf8_utf16) are deprecated in C++17.
+            // (The std::codecvt class template is NOT deprecated.) The C++ Standard doesn't provide equivalent non-deprecated functionality; consider using
+            // MultiByteToWideChar() and WideCharToMultiByte() from <Windows.h> instead. You can define _SILENCE_CXX17_CODECVT_HEADER_DEPRECATION_WARNING or
+            // _SILENCE_ALL_CXX17_DEPRECATION_WARNINGS to suppress this warning.
 #ifdef WIN32
             return (char*)_bstr_t(s.c_str());
 #else
@@ -71,7 +76,7 @@ namespace utils {
 #endif
         }
 
-        inline string_t t2t(const std::string &s) {
+        inline string_t t2t(std::string s) {
 #ifdef UNICODE
             return t2w(s);
 #else
@@ -79,7 +84,11 @@ namespace utils {
 #endif
         }
 
-        inline string_t t2t(const std::wstring &s) {
+        inline string_t t2t(const char* s) {
+            return t2t(s ? std::string(s) : std::string());
+        }
+
+        inline string_t t2t(std::wstring s) {
 #ifdef UNICODE
             return t2w(s);
 #else
@@ -88,7 +97,7 @@ namespace utils {
         }
 
 #ifdef WIN32
-        inline std::string u2s(const std::string utf8) {
+        inline std::string u2s(std::string utf8) {
             std::string s;
 
             // https://blog.csdn.net/luofeixiongsix/article/details/80245351
@@ -535,6 +544,37 @@ namespace utils {
                 return text;
             }
 
+            inline std::string read(string_t path) {
+                auto s = std::string();
+                if (io::file::exists(path)) {
+#ifdef WIN32
+                    FILE* file = nullptr;
+                    _tfopen_s(&file, path.c_str(), _T("rb+"));
+#else
+                    auto file = fopen(path.c_str(), _T("rb+"));
+#endif
+                    if (file) {
+                        fseek(file, 0, SEEK_END);
+                        auto size = ftell(file);
+                        if (size > 0) {
+                            fseek(file, 0, SEEK_SET);
+                            auto p = new char[size];
+                            fread(p, size, sizeof(p[0]), file);
+                            s.append(p, size);
+                            delete[] p;
+#ifdef WIN32
+                            p = nullptr;
+#endif
+                        }
+                        fclose(file);
+#ifdef WIN32
+                        file = nullptr;
+#endif
+                    }
+                }
+                return s;
+            }
+
             inline unsigned long long size(string_t path) {
                 return io::file::exists(path) ? std::filesystem::file_size(path) : -1;
             }
@@ -684,7 +724,11 @@ namespace utils {
             }
 
             inline void pack(string_t src, string_t dst = "") {
-                if (io::directory::exists(src)) {
+                auto src_ = src;
+                if (!src_.empty() && io::directory::exists(src_)) {
+                    if (src_.at(src_.size() - 1) != PATH_SEPARATOR) {
+                        src_ += PATH_SEPARATOR;
+                    }
                     auto hpp = dst;
                     if (hpp.empty()) {
                         hpp = _T("auto_gen.hpp");
@@ -697,9 +741,10 @@ namespace utils {
                     p = ::fopen(hpp.c_str(), _T("ab+"));
 #endif
                     if (p) {
-                        auto files = io::directory::files(src);
+                        auto files = io::directory::files(src_);
                         io::file::fwrite(_T("#pragma once\n"), p);
                         io::file::fwrite(_T("#include <string>\n"), p);
+                        io::file::fwrite(_T("#include <vector>\n"), p);
                         io::file::fwrite(_T("namespace auto_gen {\n"), p);
                         io::file::fwrite(_T("   inline std::string get_base64_chars() {\n"), p);
                         io::file::fwrite(_T("       static std::string base64_chars = \"ABCDEFGHIJKLMNOPQRSTUVWXYZ\"\n"), p);
@@ -737,32 +782,29 @@ namespace utils {
                         io::file::fwrite(_T("       return decoded;\n"), p);
                         io::file::fwrite(_T("   }\n"), p);
                         io::file::fwrite(_T(""), p);
-                        io::file::fwrite(_T("   std::string res(const char* name) {\n"), p);
+                        io::file::fwrite(_T("   inline std::string res(const char* name) {\n"), p);
                         for (auto &f: files) {
-                            auto name = f.substr(src.size());
+                            auto name = f.substr(src_.size());
                             io::file::fwrite(strings::format("        if (strcmp(name, \"%s\") == 0) {\n", name.c_str()), p);
                             auto count = 0;
                             for (auto &base64: io::file::base64(f, 100)) {
                                 if (count == 0) {
-                                    io::file::fwrite(strings::format("            auto s = \"%s\"", base64.c_str()), p);
-                                } else {
-                                    io::file::fwrite(strings::format("\n                     \"%s\"", base64.c_str()), p);
+                                    io::file::fwrite(strings::format("            auto s = std::string();\n", base64.c_str()), p);
                                 }
+                                io::file::fwrite(strings::format("            s += \"%s\";\n", base64.c_str()), p);
                                 count++;
-                            }
-                            if (count > 0) {
-                                io::file::fwrite(_T(";\n"), p);
                             }
                             io::file::fwrite(strings::format("            return from_base64(s);\n", io::fileName(f).c_str()), p);
                             io::file::fwrite(strings::format("        }\n"), p);
                         }
                         io::file::fwrite(_T("        return std::string();\n"), p);
                         io::file::fwrite(_T("    }\n"), p);
-                        io::file::fwrite(_T("    std::vector<std::string> files() {\n"), p);
+                        io::file::fwrite(_T("\n"), p);
+                        io::file::fwrite(_T("    inline std::vector<std::string> files() {\n"), p);
                         io::file::fwrite(_T("        static std::vector<std::string> f;\n"), p);
                         io::file::fwrite(_T("        if (f.empty()) {\n"), p);
                         for (auto &f: files) {
-                            auto name = f.substr(src.size());
+                            auto name = f.substr(src_.size());
                             io::file::fwrite(strings::format(_T("            f.push_back(\"%s\");\n"), name.c_str()), p);
                         }
                         io::file::fwrite(_T("        }\n"), p);

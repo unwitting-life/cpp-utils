@@ -12,7 +12,7 @@
 #define CPPHTTPLIB_OPENSSL_SUPPORT
 
 #include "cpp-httplib/v0.11.2+/httplib.h"
-
+#include "MimeTypes/MimeTypes.h"
 #ifdef _MSC_VER
 
 #ifndef UTILS_SOURCE_DIRECTORY
@@ -40,6 +40,7 @@ namespace utils {
             constexpr auto HTTP = _T("http://");
             constexpr auto HTTPS = _T("https://");
         }
+
         namespace status {
             constexpr int UNKNOWN = 0;
             constexpr int CONNECTION_BREAK = -1;
@@ -48,6 +49,12 @@ namespace utils {
             constexpr int TEMPORARILY_MOVED = 302;
             constexpr int NOT_FOUND = 404;
         }
+
+        namespace method {
+            constexpr auto GET = _T("GET");
+            constexpr auto POST = _T("POST");
+        }
+
         static int retry = 3;
         static int retryWait = 1000;
 
