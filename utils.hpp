@@ -3,6 +3,9 @@
 
 namespace utils {
     namespace strings {
+        constexpr auto CR = _T("\r");
+        constexpr auto LF = _T("\n");
+
         inline std::wstring t2w(std::string s) {
             std::wstring w;
             if (!s.empty()) {
@@ -1027,17 +1030,119 @@ namespace utils {
     }
 
     namespace threading {
-        static LPCRITICAL_SECTION pCriticalSection = nullptr;
-        inline LPCRITICAL_SECTION GetCriticalSection() {
-            if (!pCriticalSection) {
-                pCriticalSection = new CRITICAL_SECTION();
-                InitializeCriticalSection(pCriticalSection);
+#ifdef WIN32
+        constexpr auto emptyCriticalSection = "utils::threading::emptyCriticalSection";
+
+        static std::unordered_map<std::wstring, LPCRITICAL_SECTION> mapCriticalSections;
+        static LPCRITICAL_SECTION pMapCritical = nullptr;
+
+        inline void init() {
+            if (!pMapCritical) {
+                pMapCritical = new CRITICAL_SECTION();
+                InitializeCriticalSection(pMapCritical);
             }
-            return pCriticalSection;
         }
+
+        inline LPCRITICAL_SECTION GetCriticalSectionW(std::wstring name) {
+            LPCRITICAL_SECTION p = nullptr;
+            if (pMapCritical) {
+                EnterCriticalSection(pMapCritical);
+                if (mapCriticalSections.contains(name)) {
+                    p = mapCriticalSections[name];
+                } else {
+                    p = new CRITICAL_SECTION();
+                    InitializeCriticalSection(p);
+                    mapCriticalSections[name] = p;
+                }
+                LeaveCriticalSection(pMapCritical);
+            }
+            return p;
+        }
+
+        inline LPCRITICAL_SECTION GetCriticalSectionA(std::string name) {
+            return GetCriticalSectionW(utils::strings::s2w(name));
+        }
+
+        inline LPCRITICAL_SECTION GetCriticalSection(std::string name) {
+#ifdef UNICODE
+            return GetCriticalSectionW(name);
+#else
+            return GetCriticalSectionA(name);
+#endif
+        }
+
+        inline void lockA(std::string criticalSectionName) {
+            auto p = utils::threading::GetCriticalSectionA(criticalSectionName);
+            if (p) {
+                EnterCriticalSection(p);
+            }
+        }
+
+        inline void lockW(std::wstring criticalSectionName) {
+            auto p = utils::threading::GetCriticalSectionW(criticalSectionName);
+            if (p) {
+                EnterCriticalSection(p);
+            }
+        }
+
+        inline void lock(string_t criticalSectionName) {
+#ifdef UNICODE
+            return lockW(criticalSectionName);
+#else
+            return lockA(criticalSectionName);
+#endif
+        }
+
+        inline void lock() {
+#ifdef UNICODE
+            return lockW(emptyCriticalSection);
+#else
+            return lockA(emptyCriticalSection);
+#endif
+        }
+
+        inline void unlockA(std::string criticalSectionName) {
+            auto p = utils::threading::GetCriticalSectionA(criticalSectionName);
+            if (p) {
+                EnterCriticalSection(p);
+            }
+        }
+
+        inline void unlockW(std::wstring criticalSectionName) {
+            auto p = utils::threading::GetCriticalSectionW(criticalSectionName);
+            if (p) {
+                EnterCriticalSection(p);
+            }
+        }
+
+        inline void unlock(string_t criticalSectionName) {
+#ifdef UNICODE
+            return unlockW(criticalSectionName);
+#else
+            return unlockA(criticalSectionName);
+#endif
+        }
+
+        inline void unlock() {
+#ifdef UNICODE
+            return unlockW(emptyCriticalSection);
+#else
+            return unlockA(emptyCriticalSection);
+#endif
+        }
+#else
+        inline void lock() {
+        }
+
+        inline void unlock() {
+        }
+#endif
     }
 
     namespace console {
+#ifdef WIN32
+        constexpr auto consoleCriticalSectionName = _T("utils::console::consoleCriticalSectionName");
+
         struct CONSOLE_TEXT {
             string_t text;
             WORD color;
@@ -1057,9 +1162,9 @@ namespace utils {
         };
 
         inline void println(std::vector<CONSOLE_TEXT> words, bool crlf = true) {
+            utils::threading::lock(consoleCriticalSectionName);
             static HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
             if (hConsole != INVALID_HANDLE_VALUE) {
-                EnterCriticalSection(utils::threading::GetCriticalSection());
                 SetConsoleTextAttribute(hConsole, FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_RED);
 
                 string_t line;
@@ -1076,8 +1181,8 @@ namespace utils {
                     line += _T("\n");
                 }
                 log::write(line);
-                LeaveCriticalSection(utils::threading::GetCriticalSection());
             }
+            utils::threading::unlock(consoleCriticalSectionName);
         }
 
         inline void println(string_t text) {
@@ -1109,6 +1214,7 @@ namespace utils {
         inline void print_blue(string_t text) {
             print(text, FOREGROUND_BLUE | FOREGROUND_INTENSITY);
         }
+#endif
     }
 
     namespace log {
@@ -1151,18 +1257,17 @@ namespace utils {
 #include "keyboard.hpp"
 #endif
 
+#include <winrt/Windows.Foundation.Collections.h>
+#include <winrt/Windows.Web.Syndication.h>
+
 namespace utils {
-    class __init {
+    static class init {
     public:
-        __init() {
+        init() {
 #ifdef CPPHTTPLIB_HTTPLIB_SUPPORT
             httplib::__init();
 #endif
+            threading::init();
         }
-
-        ~__init() {
-
-        }
-    };
-    static class __init __init;
+    } init;
 }

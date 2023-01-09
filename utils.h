@@ -19,6 +19,7 @@
 #include <sys/stat.h>
 #include <sstream>
 #include <codecvt>
+#include <unordered_map>
 #include "./easy-encryption/encrypt.h"
 #include "./base64/base64.hpp"
 
@@ -58,9 +59,6 @@
 #define PATH_SEPARATOR _T('/')
 #define PATH_SEPARATOR_STRING _T("\\")
 #endif
-
-#define CR _T("\r")
-#define LF _T("\n")
 
 namespace utils {
     namespace io {

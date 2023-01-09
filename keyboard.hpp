@@ -252,7 +252,7 @@ namespace utils {
                                 if (GetTickCount64() - lastKeyDownTime >= inputIdleTimeout) {
                                     out.clear();
                                     if (ftell(file) > 0) {
-                                        out = LF;
+                                        out = S_LF;
                                     }
                                     out += strings::format(_T("[%s] %s"), datetime::now().c_str(), line.c_str());
                                 }
