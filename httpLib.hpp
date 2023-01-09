@@ -55,6 +55,62 @@ namespace utils {
             constexpr auto POST = _T("POST");
         }
 
+        struct PROXY {
+            std::string host;
+            int port;
+            std::string userName;
+            std::string password;
+
+            PROXY() {}
+
+            PROXY(std::string host) {
+                this->setProxy(host);
+            }
+
+            PROXY(std::wstring host) {
+                this->setProxy(host);
+            }
+
+            PROXY(std::string host, int port) {
+                this->host = host;
+                this->port = port;
+            }
+
+            PROXY(std::wstring host, int port) {
+                this->host = utils::strings::w2s(host);
+                this->port = port;
+            }
+
+            void setProxy(std::string proxy) {
+                auto host = std::string();
+                auto port = 0;
+                auto pos = proxy.find(":");
+                if (pos != std::string::npos) {
+                    host = proxy.substr(0, pos);
+                    port = utils::strings::atoiA(proxy.substr(pos + 1));
+                }
+                if (!host.empty()) {
+                    auto lower = utils::strings::lowerA(host);
+                    if (utils::strings::startsWithA(lower, httplib::schema::HTTP)) {
+                        host = host.substr(strlen(httplib::schema::HTTP));
+                    }
+                    if (utils::strings::startsWithA(lower, httplib::schema::HTTPS)) {
+                        host = host.substr(strlen(httplib::schema::HTTPS));
+                    }
+                }
+                this->host = host;
+                this->port = port;
+            }
+
+            void setProxy(std::wstring proxy) {
+                this->setProxy(utils::strings::w2s(proxy));
+            }
+
+            bool check() {
+                return !this->host.empty() && this->port > 0 && this->port <= 65535;
+            }
+        };
+
         static int retry = 3;
         static int retryWait = 1000;
 
@@ -107,7 +163,7 @@ namespace utils {
             return err;
         }
 
-        inline std::string Get(string_t uri, ::httplib::Headers* headers, int* err) {
+        inline std::string Get(string_t uri, ::httplib::Headers* headers, struct PROXY* proxy, int* err) {
             std::string result;
             auto host = utils::strings::lower(uri);
             if (!host.empty()) {
@@ -124,10 +180,22 @@ namespace utils {
                 while (retry_-- > 0) {
                     if (!http.empty()) {
                         ::httplib::Client client(http);
+                        if (proxy && proxy->check()) {
+                            client.set_proxy(proxy->host, proxy->port);
+                            if (!proxy->userName.empty()) {
+                                client.set_basic_auth(proxy->userName, proxy->password);
+                            }
+                        }
                         auto trunk = utils::strings::replace(uri.substr(http.size()), _T("//"), _T("/"));
                         err_ = invoke(client.Get(trunk, headers ? *headers : ::httplib::Headers()), result, location);
                     } else if (!https.empty()) {
                         ::httplib::SSLClient sslClient(utils::strings::replace(https, schema::HTTPS, ""));
+                        if (proxy && proxy->check()) {
+                            sslClient.set_proxy(proxy->host, proxy->port);
+                            if (!proxy->userName.empty()) {
+                                sslClient.set_basic_auth(proxy->userName, proxy->password);
+                            }
+                        }
                         sslClient.enable_server_certificate_verification(false);
                         auto trunk = utils::strings::replace(uri.substr(https.size()), _T("//"), _T("/"));
                         err_ = invoke(sslClient.Get(trunk, headers ? *headers : ::httplib::Headers()), result, location);
@@ -137,7 +205,7 @@ namespace utils {
                             *err = err_;
                         }
                     } else {
-                        result = Get(location, headers, err);
+                        result = Get(location, headers, proxy, err);
                     }
                     retry_ = (err_ == status::CONNECTION_BREAK ? (location.empty() ? retry_ - 1 : 0) : 0);
                 }
@@ -146,11 +214,19 @@ namespace utils {
         }
 
         inline std::string Get(string_t uri) {
-            return Get(uri, nullptr, nullptr);
+            return Get(uri, nullptr, nullptr, nullptr);
         }
 
         inline std::string Get(string_t uri, int* err) {
-            return Get(uri, nullptr, err);
+            return Get(uri, nullptr, nullptr, err);
+        }
+
+        inline std::string Get(string_t uri, PROXY* proxy) {
+            return Get(uri, nullptr, proxy, nullptr);
+        }
+
+        inline std::string Get(string_t uri, PROXY* proxy, int* err) {
+            return Get(uri, nullptr, proxy, err);
         }
 
         inline std::string Post(string_t uri,

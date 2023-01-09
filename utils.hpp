@@ -3,7 +3,7 @@
 
 namespace utils {
     namespace strings {
-        inline std::wstring t2w(const std::string &s) {
+        inline std::wstring t2w(std::string s) {
             std::wstring w;
             if (!s.empty()) {
                 size_t pos;
@@ -74,6 +74,14 @@ namespace utils {
             std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t> convert;
             return convert.to_bytes(s);
 #endif
+        }
+
+        inline std::wstring s2w(std::string s) {
+            return t2w(s);
+        }
+
+        inline std::string w2s(std::wstring s) {
+            return t2s(s);
         }
 
         inline string_t t2t(std::string s) {
@@ -223,10 +231,24 @@ namespace utils {
             return s;
         }
 
-        inline string_t lower(string_t s) {
-            string_t lower = s;
+        inline std::string lowerA(std::string s) {
+            std::string lower = s;
             std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
             return lower;
+        }
+
+        inline std::wstring lowerW(std::wstring s) {
+            std::wstring lower = s;
+            std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
+            return lower;
+        }
+
+        inline string_t lower(string_t s) {
+#ifdef UNICODE
+            return lowerW(s);
+#else
+            return lowerA(s);
+#endif
         }
 
         inline string_t upper(string_t s) {
@@ -235,8 +257,20 @@ namespace utils {
             return upper;
         }
 
-        inline bool startsWith(string_t s, string_t find) {
+        inline bool startsWithA(std::string s, std::string find) {
             return s.find(find) == 0;
+        }
+
+        inline bool startsWithW(std::wstring s, std::wstring find) {
+            return s.find(find) == 0;
+        }
+
+        inline bool startsWith(string_t s, string_t find) {
+#ifdef UNICODE
+            return startsWithW(s, find);
+#else
+            return startsWithA(s, find);
+#endif
         }
 
         inline bool endsWith(string_t s, string_t find) {
@@ -357,14 +391,32 @@ namespace utils {
             return numbers_;
         }
 
-        inline int atoi(string_t s) {
-            string_t number;
-            for (auto &e: s) {
+        inline int atoiA(std::string s) {
+            std::string number;
+            for (auto& e : s) {
                 if (e >= '0' && e <= '9') {
                     number += e;
                 }
             }
             return ::atoi(t2s(number).c_str());
+        }
+
+        inline int atoiW(string_t s) {
+            string_t number;
+            for (auto& e : s) {
+                if (e >= '0' && e <= '9') {
+                    number += e;
+                }
+            }
+            return ::atoi(t2s(number).c_str());
+        }
+
+        inline int atoi(string_t s) {
+#ifdef UNICODE
+            return atoiW(s);
+#else
+            return atoiA(s);
+#endif
         }
 
         inline string_t number(string_t s) {
