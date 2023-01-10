@@ -20,6 +20,8 @@
 #include <sstream>
 #include <codecvt>
 #include <unordered_map>
+#include <thread>
+#include <mutex>
 #include "./easy-encryption/encrypt.h"
 #include "./base64/base64.hpp"
 

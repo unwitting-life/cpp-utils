@@ -234,6 +234,62 @@ namespace utils {
             return s;
         }
 
+        inline std::string formatA(std::string f, ...) {
+            std::string s;
+            va_list args;
+            va_start(args, f);
+
+            // https://stackoverflow.com/questions/16351523/vscwprintf-on-mac-os-x-linux
+#ifdef WIN32
+            size_t size = (_vscprintf(f.c_str(), args) + 1) * sizeof(char);
+#else
+            size_t size = (vsnprintf(nullptr, 0, f.c_str(), args) + 1) * sizeof(TCHAR);
+#endif
+            va_end(args);
+            auto p = new char[size];
+            if (p) {
+                memset(p, 0, size);
+                va_start(args, f);
+#if WIN32
+                _vsnprintf_s(p, size, size - 1, f.c_str(), args);
+#else
+                vsnprintf(p, size, f.c_str(), args);
+#endif
+                va_end(args);
+                s = p;
+                delete[] p;
+            }
+            return s;
+        }
+
+        inline std::wstring formatW(std::wstring f, ...) {
+            std::wstring s;
+            va_list args;
+            va_start(args, f);
+
+            // https://stackoverflow.com/questions/16351523/vscwprintf-on-mac-os-x-linux
+#ifdef WIN32
+            size_t size = (_vscwprintf(f.c_str(), args) + 1) * sizeof(wchar_t);
+#else
+            size_t size = (vsnprintf(nullptr, 0, f.c_str(), args) + 1) * sizeof(TCHAR);
+#endif
+            va_end(args);
+            auto p = new wchar_t[size];
+            if (p) {
+                memset(p, 0, size);
+                va_start(args, f);
+#if WIN32
+                _vsnwprintf_s(p, size, size - 1, f.c_str(), args);
+#else
+                vsnprintf(p, size, f.c_str(), args);
+#endif
+                va_end(args);
+                s = p;
+                delete[] p;
+            }
+            return s;
+        }
+
         inline std::string lowerA(std::string s) {
             std::string lower = s;
             std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
@@ -457,13 +513,30 @@ namespace utils {
 
     namespace datetime {
 #ifdef WIN32
-        inline string_t now() {
+        inline std::string nowA(char* format = nullptr) {
             SYSTEMTIME time = { 0 };
             GetLocalTime(&time);
-            TCHAR buffer[MAX_PATH] = { 0 };
-            _sntprintf_s(buffer, _countof(buffer) - 1, _T("%04d/%02d/%02d %02d:%02d:%02d.%03d"),
+            char buffer[100] = { 0 };
+            _snprintf_s(buffer, _countof(buffer) - 1, format ? format : "%04d/%02d/%02d %02d:%02d:%02d.%03d",
                 time.wYear, time.wMonth, time.wDay, time.wHour, time.wMinute, time.wSecond, time.wMilliseconds);
             return buffer;
+        }
+
+        inline std::wstring nowW(wchar_t* format = nullptr) {
+            SYSTEMTIME time = { 0 };
+            GetLocalTime(&time);
+            wchar_t buffer[100] = { 0 };
+            _snwprintf_s(buffer, _countof(buffer) - 1, format ? format : L"%04d/%02d/%02d %02d:%02d:%02d.%03d",
+                time.wYear, time.wMonth, time.wDay, time.wHour, time.wMinute, time.wSecond, time.wMilliseconds);
+            return buffer;
+        }
+
+        inline string_t now(const TCHAR* format = nullptr) {
+#ifdef UNICODE
+            return nowW(const_cast<wchar_t*>(format));
+#else
+            return nowA(const_cast<char*>(format));
+#endif
         }
 #endif
     }
@@ -1030,118 +1103,102 @@ namespace utils {
     }
 
     namespace threading {
-#ifdef WIN32
-        constexpr auto emptyCriticalSection = "utils::threading::emptyCriticalSection";
 
-        static std::unordered_map<std::wstring, LPCRITICAL_SECTION> mapCriticalSections;
-        static LPCRITICAL_SECTION pMapCritical = nullptr;
+        // https://blog.csdn.net/anwh9295/article/details/120444373
+        constexpr auto nullMutexName = "utils::threading::nullMutexName";
 
-        inline void init() {
-            if (!pMapCritical) {
-                pMapCritical = new CRITICAL_SECTION();
-                InitializeCriticalSection(pMapCritical);
+        static std::unordered_map<std::wstring, std::mutex*> mapMutex;
+        static std::mutex* pMutexSingleton = new std::mutex();
+
+        inline std::mutex* GetMutexW(std::wstring mutexName) {
+            std::mutex* p = nullptr;
+            pMutexSingleton->lock();
+            if (mapMutex.contains(mutexName)) {
+                p = mapMutex[mutexName];
+            } else {
+                p = new std::mutex();
+                mapMutex[mutexName] = p;
             }
-        }
-
-        inline LPCRITICAL_SECTION GetCriticalSectionW(std::wstring name) {
-            LPCRITICAL_SECTION p = nullptr;
-            if (pMapCritical) {
-                EnterCriticalSection(pMapCritical);
-                if (mapCriticalSections.contains(name)) {
-                    p = mapCriticalSections[name];
-                } else {
-                    p = new CRITICAL_SECTION();
-                    InitializeCriticalSection(p);
-                    mapCriticalSections[name] = p;
-                }
-                LeaveCriticalSection(pMapCritical);
-            }
+            pMutexSingleton->unlock();
             return p;
         }
 
-        inline LPCRITICAL_SECTION GetCriticalSectionA(std::string name) {
-            return GetCriticalSectionW(utils::strings::s2w(name));
+        inline std::mutex* GetMutexA(std::string mutexName) {
+            return GetMutexW(utils::strings::s2w(mutexName));
         }
 
-        inline LPCRITICAL_SECTION GetCriticalSection(std::string name) {
+        inline std::mutex* GetMutex(string_t mutexName) {
 #ifdef UNICODE
-            return GetCriticalSectionW(name);
+            return GetMutexW(mutexName);
 #else
-            return GetCriticalSectionA(name);
+            return GetMutexA(mutexName);
 #endif
         }
 
-        inline void lockA(std::string criticalSectionName) {
-            auto p = utils::threading::GetCriticalSectionA(criticalSectionName);
+        inline void lockA(std::string lockName) {
+            auto p = utils::threading::GetMutexA(lockName);
             if (p) {
-                EnterCriticalSection(p);
+                p->lock();
             }
         }
 
-        inline void lockW(std::wstring criticalSectionName) {
-            auto p = utils::threading::GetCriticalSectionW(criticalSectionName);
+        inline void lockW(std::wstring lockName) {
+            auto p = utils::threading::GetMutexW(lockName);
             if (p) {
-                EnterCriticalSection(p);
+                p->unlock();
             }
         }
 
-        inline void lock(string_t criticalSectionName) {
+        inline void lock(string_t lockName) {
 #ifdef UNICODE
-            return lockW(criticalSectionName);
+            return lockW(lockName);
 #else
-            return lockA(criticalSectionName);
+            return lockA(lockName);
 #endif
         }
 
         inline void lock() {
 #ifdef UNICODE
-            return lockW(emptyCriticalSection);
+            return lockW(nullMutexName);
 #else
-            return lockA(emptyCriticalSection);
+            return lockA(nullMutexName);
 #endif
         }
 
-        inline void unlockA(std::string criticalSectionName) {
-            auto p = utils::threading::GetCriticalSectionA(criticalSectionName);
+        inline void unlockA(std::string lockName) {
+            auto p = utils::threading::GetMutexA(lockName);
             if (p) {
-                EnterCriticalSection(p);
+                p->unlock();
             }
         }
 
-        inline void unlockW(std::wstring criticalSectionName) {
-            auto p = utils::threading::GetCriticalSectionW(criticalSectionName);
+        inline void unlockW(std::wstring lockName) {
+            auto p = utils::threading::GetMutexW(lockName);
             if (p) {
-                EnterCriticalSection(p);
+                p->unlock();
             }
         }
 
-        inline void unlock(string_t criticalSectionName) {
+        inline void unlock(string_t lockName) {
 #ifdef UNICODE
-            return unlockW(criticalSectionName);
+            return unlockW(lockName);
 #else
-            return unlockA(criticalSectionName);
+            return unlockA(lockName);
 #endif
         }
 
         inline void unlock() {
 #ifdef UNICODE
-            return unlockW(emptyCriticalSection);
+            return unlockW(nullMutexName);
 #else
-            return unlockA(emptyCriticalSection);
+            return unlockA(nullMutexName);
 #endif
         }
-#else
-        inline void lock() {
-        }
-
-        inline void unlock() {
-        }
-#endif
     }
 
     namespace console {
 #ifdef WIN32
-        constexpr auto consoleCriticalSectionName = _T("utils::console::consoleCriticalSectionName");
+        constexpr auto consoleMutexName = _T("utils::console::consoleMutexName");
 
         struct CONSOLE_TEXT {
             string_t text;
@@ -1162,7 +1219,7 @@ namespace utils {
         };
 
         inline void println(std::vector<CONSOLE_TEXT> words, bool crlf = true) {
-            utils::threading::lock(consoleCriticalSectionName);
+            utils::threading::lock(consoleMutexName);
             static HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
             if (hConsole != INVALID_HANDLE_VALUE) {
                 SetConsoleTextAttribute(hConsole, FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_RED);
@@ -1182,7 +1239,7 @@ namespace utils {
                 }
                 log::write(line);
             }
-            utils::threading::unlock(consoleCriticalSectionName);
+            utils::threading::unlock(consoleMutexName);
         }
 
         inline void println(string_t text) {
@@ -1267,7 +1324,6 @@ namespace utils {
 #ifdef CPPHTTPLIB_HTTPLIB_SUPPORT
             httplib::__init();
 #endif
-            threading::init();
         }
     } init;
 }

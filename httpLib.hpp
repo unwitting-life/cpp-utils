@@ -44,6 +44,7 @@ namespace utils {
         namespace status {
             constexpr int UNKNOWN = 0;
             constexpr int CONNECTION_BREAK = -1;
+            constexpr int SYSTEM_ERROR = -2;
             constexpr int OK = 200;
             constexpr int PERMANENTLY_MOVED = 301;
             constexpr int TEMPORARILY_MOVED = 302;
@@ -128,6 +129,32 @@ namespace utils {
 #endif
         }
 
+        inline std::string GetUrlA(std::string uri) {
+            auto uri_ = uri;
+            auto pos = uri_.find("?");
+            if (pos != std::string::npos) {
+                uri_ = uri_.substr(0, pos);
+            }
+            return uri_;
+        }
+
+        inline std::wstring GetUrlW(std::wstring uri) {
+            auto uri_ = uri;
+            auto pos = uri_.find(L"?");
+            if (pos != std::wstring::npos) {
+                uri_ = uri_.substr(0, pos);
+            }
+            return uri_;
+        }
+
+        inline string_t GetUrl(string_t uri) {
+#ifdef UNICODE
+            return GetUrlW(uri);
+#else
+            return GetUrlA(uri);
+#endif
+        }
+
         inline int invoke(::httplib::Result result, std::string& body, std::string& location) {
             auto err = status::CONNECTION_BREAK;
             switch (result.error()) {
@@ -187,7 +214,11 @@ namespace utils {
                             }
                         }
                         auto trunk = utils::strings::replace(uri.substr(http.size()), _T("//"), _T("/"));
-                        err_ = invoke(client.Get(trunk, headers ? *headers : ::httplib::Headers()), result, location);
+                        try {
+                            err_ = invoke(client.Get(trunk, headers ? *headers : ::httplib::Headers()), result, location);
+                        } catch (std::system_error&) {
+                            err_ = status::SYSTEM_ERROR;
+                        }
                     } else if (!https.empty()) {
                         ::httplib::SSLClient sslClient(utils::strings::replace(https, schema::HTTPS, ""));
                         if (proxy && proxy->check()) {
@@ -198,7 +229,11 @@ namespace utils {
                         }
                         sslClient.enable_server_certificate_verification(false);
                         auto trunk = utils::strings::replace(uri.substr(https.size()), _T("//"), _T("/"));
-                        err_ = invoke(sslClient.Get(trunk, headers ? *headers : ::httplib::Headers()), result, location);
+                        try {
+                            err_ = invoke(sslClient.Get(trunk, headers ? *headers : ::httplib::Headers()), result, location);
+                        } catch (std::system_error&) {
+                            err_ = status::SYSTEM_ERROR;
+                        }
                     }
                     if (location.empty()) {
                         if (err) {
