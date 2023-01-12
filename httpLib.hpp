@@ -11,7 +11,7 @@
 #include "utils.hpp"
 #define CPPHTTPLIB_OPENSSL_SUPPORT
 
-#include "cpp-httplib/v0.11.2+/httplib.h"
+#include "cpp-httplib/v0.11.4+/httplib.h"
 #include "MimeTypes/MimeTypes.h"
 #ifdef _MSC_VER
 
@@ -92,11 +92,11 @@ namespace utils {
                 }
                 if (!host.empty()) {
                     auto lower = utils::strings::lowerA(host);
-                    if (utils::strings::startsWithA(lower, httplib::schema::HTTP)) {
-                        host = host.substr(strlen(httplib::schema::HTTP));
+                    if (utils::strings::startsWithA(lower, utils::strings::t2s(httplib::schema::HTTP))) {
+                        host = host.substr(utils::strings::t2s(httplib::schema::HTTP).size());
                     }
-                    if (utils::strings::startsWithA(lower, httplib::schema::HTTPS)) {
-                        host = host.substr(strlen(httplib::schema::HTTPS));
+                    if (utils::strings::startsWithA(lower, utils::strings::t2s(httplib::schema::HTTPS))) {
+                        host = host.substr(utils::strings::t2s(httplib::schema::HTTPS).size());
                     }
                 }
                 this->host = host;
@@ -173,7 +173,7 @@ namespace utils {
                 case status::PERMANENTLY_MOVED:
                 case status::TEMPORARILY_MOVED: {
                     for (auto& header : result->headers) {
-                        if (utils::strings::equalsIgnoreCase(header.first, header::Location)) {
+                        if (utils::strings::equalsIgnoreCase(utils::strings::t2t(header.first), header::Location)) {
                             location = header.second;
                             break;
                         }
@@ -222,10 +222,15 @@ namespace utils {
                     } else if (!https.empty()) {
                         ::httplib::SSLClient sslClient(utils::strings::replace(https, schema::HTTPS, ""));
                         if (proxy && proxy->check()) {
+#ifdef WIN32
+                            OutputDebugString(_T("* v0.11.4+ does not support ssl throught proxy yet, proxy was ignored."));
+#endif
+#if 0
                             sslClient.set_proxy(proxy->host, proxy->port);
                             if (!proxy->userName.empty()) {
                                 sslClient.set_basic_auth(proxy->userName, proxy->password);
                             }
+#endif
                         }
                         sslClient.enable_server_certificate_verification(false);
                         auto trunk = utils::strings::replace(uri.substr(https.size()), _T("//"), _T("/"));
@@ -262,6 +267,15 @@ namespace utils {
 
         inline std::string Get(string_t uri, PROXY* proxy, int* err) {
             return Get(uri, nullptr, proxy, err);
+        }
+
+        inline std::string Get(string_t uri, string_t proxyHost, int proxyPort, int* err) {
+            auto proxy = PROXY(proxyHost, proxyPort);
+            return Get(uri, nullptr, &proxy, err);
+        }
+
+        inline std::string Get(string_t uri, string_t proxyHost, int proxyPort) {
+            return Get(uri, proxyHost, proxyPort, nullptr);
         }
 
         inline std::string Post(string_t uri,

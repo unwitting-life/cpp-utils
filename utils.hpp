@@ -413,8 +413,20 @@ namespace utils {
             return split_;
         }
 
+        inline bool equalsIgnoreCaseA(std::string s, std::string compare) {
+            return lowerA(s) == lowerA(compare);
+        }
+
+        inline bool equalsIgnoreCaseW(std::wstring s, std::wstring compare) {
+            return lowerW(s) == lowerW(compare);
+        }
+
         inline bool equalsIgnoreCase(string_t s, string_t compare) {
-            return lower(s) == lower(compare);
+#ifdef UNICODE
+            return equalsIgnoreCaseW(s, compare);
+#else
+            return equalsIgnoreCaseA(s, compare);
+#endif
         }
 
         inline std::vector<string_t> sort(std::vector<string_t> s, bool descend = false) {
@@ -556,8 +568,8 @@ namespace utils {
         }
         namespace path {
             inline string_t combine(string_t path1, string_t path2) {
-                string_t s1 = strings::replace(path1, "/", PATH_SEPARATOR);
-                string_t s2 = strings::replace(path2, "/", PATH_SEPARATOR);
+                string_t s1 = strings::replace(path1, _T("/"), PATH_SEPARATOR);
+                string_t s2 = strings::replace(path2, _T("/"), PATH_SEPARATOR);
                 if (!s1.empty() && s1.at(s1.size() - 1) != PATH_SEPARATOR) {
                     if (s2.empty() || s2.at(0) != PATH_SEPARATOR) {
                         s1 += PATH_SEPARATOR;
@@ -602,7 +614,7 @@ namespace utils {
 
             inline string_t GetFileName(string_t path) {
                 string_t fileName;
-                string_t path_ = strings::replace(path, "/", PATH_SEPARATOR);
+                string_t path_ = strings::replace(path, _T("/"), PATH_SEPARATOR);
                 auto pos = path_.find_last_of(PATH_SEPARATOR);
                 if (pos != string_t::npos) {
                     fileName = path_.substr(pos + 1);
@@ -612,7 +624,7 @@ namespace utils {
 
             inline string_t GetDirectoryPath(string_t path) {
                 string_t directoryPath;
-                string_t path_ = strings::replace(path, "/", PATH_SEPARATOR);
+                string_t path_ = strings::replace(path, _T("/"), PATH_SEPARATOR);
                 auto pos = path_.find_last_of(PATH_SEPARATOR);
                 if (pos != string_t::npos) {
                     directoryPath = path_.substr(0, pos);
@@ -621,7 +633,7 @@ namespace utils {
             }
 
             inline string_t GetDirectoryName(string_t path) {
-                string_t path_ = strings::replace(path, "/", PATH_SEPARATOR);
+                string_t path_ = strings::replace(path, _T("/"), PATH_SEPARATOR);
                 string_t directoryName = GetDirectoryPath(path_);
                 auto pos = directoryName.find_last_of(PATH_SEPARATOR);
                 if (pos != string_t::npos) {
@@ -642,7 +654,7 @@ namespace utils {
             }
 
             inline string_t GetSpecialFolderPath(string_t path) {
-                char buffer[MAX_PATH] = { 0 };
+                TCHAR buffer[MAX_PATH] = { 0 };
                 SHGetSpecialFolderPath(0, buffer, CSIDL_PERSONAL, false);
                 return io::path::combine(buffer, path);
             }
@@ -785,15 +797,16 @@ namespace utils {
                     file = ::fopen(path.c_str(), _T("rb+"));
 #endif
                     if (file) {
+                        auto bytes = std::string();
                         while (!::feof(file)) {
                             auto numberOfBytesRead = ::fread(buffer, sizeof(buffer[0]), _countof(buffer), file);
                             if (numberOfBytesRead > 0) {
-                                s.append(buffer, numberOfBytesRead);
+                                bytes.append(buffer, numberOfBytesRead);
                             }
                         }
                         fclose(file);
                         file = nullptr;
-                        s = strings::t2t(base64::to_base64(s));
+                        s = strings::t2t(base64::to_base64(bytes));
                     }
                 }
                 return s;
@@ -851,7 +864,7 @@ namespace utils {
                 return files_;
             }
 
-            inline void pack(string_t src, string_t dst = "") {
+            inline void pack(string_t src, string_t dst = _T("")) {
                 auto src_ = src;
                 if (!src_.empty() && io::directory::exists(src_)) {
                     if (src_.at(src_.size() - 1) != PATH_SEPARATOR) {
@@ -913,17 +926,17 @@ namespace utils {
                         io::file::fwrite(_T("   inline std::string res(const char* name) {\n"), p);
                         for (auto &f: files) {
                             auto name = f.substr(src_.size());
-                            io::file::fwrite(strings::format("        if (strcmp(name, \"%s\") == 0) {\n", name.c_str()), p);
+                            io::file::fwrite(strings::format(_T("        if (strcmp(name, \"%s\") == 0) {\n"), name.c_str()), p);
                             auto count = 0;
                             for (auto &base64: io::file::base64(f, 100)) {
                                 if (count == 0) {
-                                    io::file::fwrite(strings::format("            auto s = std::string();\n", base64.c_str()), p);
+                                    io::file::fwrite(strings::format(_T("            auto s = std::string();\n"), base64.c_str()), p);
                                 }
-                                io::file::fwrite(strings::format("            s += \"%s\";\n", base64.c_str()), p);
+                                io::file::fwrite(strings::format(_T("            s += \"%s\";\n"), base64.c_str()), p);
                                 count++;
                             }
-                            io::file::fwrite(strings::format("            return from_base64(s);\n", io::fileName(f).c_str()), p);
-                            io::file::fwrite(strings::format("        }\n"), p);
+                            io::file::fwrite(strings::format(_T("            return from_base64(s);\n"), io::fileName(f).c_str()), p);
+                            io::file::fwrite(strings::format(_T("        }\n")), p);
                         }
                         io::file::fwrite(_T("        return std::string();\n"), p);
                         io::file::fwrite(_T("    }\n"), p);
@@ -1103,102 +1116,42 @@ namespace utils {
     }
 
     namespace threading {
+#define recursive_lock(x) std::lock_guard<std::recursive_mutex> _recursive_mutex(*utils::threading::GetRecursiveMutex((x)))
 
         // https://blog.csdn.net/anwh9295/article/details/120444373
-        constexpr auto nullMutexName = "utils::threading::nullMutexName";
+        constexpr auto nullRecursiveMutexName = "utils::threading::nullRecursiveMutexName";
 
-        static std::unordered_map<std::wstring, std::mutex*> mapMutex;
-        static std::mutex* pMutexSingleton = new std::mutex();
+        static std::unordered_map<std::wstring, std::recursive_mutex*> mapMutex;
+        static std::recursive_mutex* pMutexSingleton = new std::recursive_mutex();
 
-        inline std::mutex* GetMutexW(std::wstring mutexName) {
-            std::mutex* p = nullptr;
-            pMutexSingleton->lock();
-            if (mapMutex.contains(mutexName)) {
-                p = mapMutex[mutexName];
+        inline std::recursive_mutex* GetRecursiveMutexW(std::wstring RecursiveMutexName) {
+            std::lock_guard<std::recursive_mutex> recursive_mutex(*pMutexSingleton);
+            std::recursive_mutex* p = nullptr;
+            if (mapMutex.contains(RecursiveMutexName)) {
+                p = mapMutex[RecursiveMutexName];
             } else {
-                p = new std::mutex();
-                mapMutex[mutexName] = p;
+                p = new std::recursive_mutex();
+                mapMutex[RecursiveMutexName] = p;
             }
-            pMutexSingleton->unlock();
             return p;
         }
 
-        inline std::mutex* GetMutexA(std::string mutexName) {
-            return GetMutexW(utils::strings::s2w(mutexName));
+        inline std::recursive_mutex* GetRecursiveMutexA(std::string RecursiveMutexName) {
+            return GetRecursiveMutexW(utils::strings::s2w(RecursiveMutexName));
         }
 
-        inline std::mutex* GetMutex(string_t mutexName) {
+        inline std::recursive_mutex* GetRecursiveMutex(string_t recursiveMutexName) {
 #ifdef UNICODE
-            return GetMutexW(mutexName);
+            return GetRecursiveMutexW(recursiveMutexName);
 #else
-            return GetMutexA(mutexName);
-#endif
-        }
-
-        inline void lockA(std::string lockName) {
-            auto p = utils::threading::GetMutexA(lockName);
-            if (p) {
-                p->lock();
-            }
-        }
-
-        inline void lockW(std::wstring lockName) {
-            auto p = utils::threading::GetMutexW(lockName);
-            if (p) {
-                p->unlock();
-            }
-        }
-
-        inline void lock(string_t lockName) {
-#ifdef UNICODE
-            return lockW(lockName);
-#else
-            return lockA(lockName);
-#endif
-        }
-
-        inline void lock() {
-#ifdef UNICODE
-            return lockW(nullMutexName);
-#else
-            return lockA(nullMutexName);
-#endif
-        }
-
-        inline void unlockA(std::string lockName) {
-            auto p = utils::threading::GetMutexA(lockName);
-            if (p) {
-                p->unlock();
-            }
-        }
-
-        inline void unlockW(std::wstring lockName) {
-            auto p = utils::threading::GetMutexW(lockName);
-            if (p) {
-                p->unlock();
-            }
-        }
-
-        inline void unlock(string_t lockName) {
-#ifdef UNICODE
-            return unlockW(lockName);
-#else
-            return unlockA(lockName);
-#endif
-        }
-
-        inline void unlock() {
-#ifdef UNICODE
-            return unlockW(nullMutexName);
-#else
-            return unlockA(nullMutexName);
+            return GetRecursiveMutexA(recursiveMutexName);
 #endif
         }
     }
 
     namespace console {
 #ifdef WIN32
-        constexpr auto consoleMutexName = _T("utils::console::consoleMutexName");
+        constexpr auto consoleRecursiveMutexName = _T("utils::console::consoleRecursiveMutexName");
 
         struct CONSOLE_TEXT {
             string_t text;
@@ -1219,7 +1172,7 @@ namespace utils {
         };
 
         inline void println(std::vector<CONSOLE_TEXT> words, bool crlf = true) {
-            utils::threading::lock(consoleMutexName);
+            recursive_lock(consoleRecursiveMutexName);
             static HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
             if (hConsole != INVALID_HANDLE_VALUE) {
                 SetConsoleTextAttribute(hConsole, FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_RED);
@@ -1239,7 +1192,6 @@ namespace utils {
                 }
                 log::write(line);
             }
-            utils::threading::unlock(consoleMutexName);
         }
 
         inline void println(string_t text) {
