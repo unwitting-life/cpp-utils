@@ -1,0 +1,4 @@
+http://mail.itocm.com/a/3485A8373DA846B9A4C666FFF69EA445
+./Configure darwin64-x86_64-cc
+./config
+make

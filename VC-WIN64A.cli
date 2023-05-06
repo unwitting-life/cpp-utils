@@ -1,0 +1,3 @@
+/I "..\cpp-utils\OpenSSL\3.0.6+\VC-WIN64A\include"
+/I "..\github.com\cpp-utils\OpenSSL\3.0.6+\VC-WIN64A\include"
+/I "..\github.com\unwitting-life\cpp-utils\OpenSSL\3.0.6+\VC-WIN64A\include"
