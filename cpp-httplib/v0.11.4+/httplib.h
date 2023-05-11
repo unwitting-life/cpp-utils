@@ -700,7 +700,7 @@ public:
   Server &set_idle_interval(const std::chrono::duration<Rep, Period> &duration);
 
   Server &set_payload_max_length(size_t length);
-
+  void set_basic_auth(const std::string &username, const std::string &password);
   bool bind_to_port(const std::string &host, int port, int socket_flags = 0);
   int bind_to_any_port(const std::string &host, int socket_flags = 0);
   bool listen_after_bind();
@@ -742,6 +742,7 @@ private:
   bool routing(Request &req, Response &res, Stream &strm);
   bool handle_file_request(const Request &req, Response &res,
                            bool head = false);
+  bool handle_authorization(const Request &req);
   bool dispatch_request(Request &req, Response &res, const Handlers &handlers);
   bool
   dispatch_request_for_content_reader(Request &req, Response &res,
@@ -783,6 +784,9 @@ private:
 
   std::atomic<bool> is_running_;
   std::map<std::string, std::string> file_extension_and_mimetype_map_;
+  std::string basic_auth_username_;
+  std::string basic_auth_password_;
+
   Handler file_request_handler_;
   Handlers get_handlers_;
   Handlers post_handlers_;
@@ -2041,12 +2045,43 @@ inline std::string base64_encode(const std::string &in) {
   return out;
 }
 
+inline std::string base64_decode(std::string const &data) {
+    static std::string base64_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+                                      "abcdefghijklmnopqrstuvwxyz"
+                                      "0123456789+/";
+    int counter = 0;
+    size_t bit_stream = 0;
+    std::string decoded;
+    size_t offset = 0;
+    for (unsigned char c: data) {
+        auto num_val = base64_chars.find(c);
+        if (num_val != std::string::npos) {
+            offset = 18 - counter % 4 * 6;
+            bit_stream += num_val << offset;
+            if (offset == 12) {
+                decoded += static_cast<char>(bit_stream >> 16 & 0xff);
+            }
+            if (offset == 6) {
+                decoded += static_cast<char>(bit_stream >> 8 & 0xff);
+            }
+            if (offset == 0 && counter != 4) {
+                decoded += static_cast<char>(bit_stream & 0xff);
+                bit_stream = 0;
+            }
+        } else if (c != '=') {
+            return std::string();
+        }
+        counter++;
+    }
+    return decoded;
+}
+
 inline bool is_file(const std::string &path) {
 #ifdef _WIN32
-  return _access_s(path.c_str(), 0) == 0;
+  return _access_s(path.c_str(), 0) == 0 && !std::filesystem::is_directory(path);
 #else
   struct stat st;
-  return stat(path.c_str(), &st) >= 0 && S_ISREG(st.st_mode);
+  return stat(path.c_str(), &st) >= 0 && S_ISREG(st.st_mode) && !std::filesystem::is_directory(path);
 #endif
 }
 
@@ -5117,6 +5152,12 @@ inline Server &Server::set_payload_max_length(size_t length) {
   return *this;
 }
 
+inline void Server::set_basic_auth(const std::string &username,
+                                   const std::string &password) {
+    basic_auth_username_ = username;
+    basic_auth_password_ = password;
+}
+
 inline bool Server::bind_to_port(const std::string &host, int port,
                                  int socket_flags) {
   if (bind_internal(host, port, socket_flags) < 0) return false;
@@ -5450,8 +5491,36 @@ inline bool Server::read_content_core(Stream &strm, Request &req, Response &res,
   return true;
 }
 
+inline bool Server::handle_authorization(const Request &req) {
+    auto b = true;
+    if (!basic_auth_username_.empty() || basic_auth_password_.empty()) {
+        constexpr auto HEADER_AUTHORIZATION = "Authorization";
+        constexpr auto BASIC = "Basic ";
+        b = false;
+        auto authorization = req.get_header_value(HEADER_AUTHORIZATION);
+        if (authorization.starts_with(BASIC)) {
+            authorization = authorization.substr(strlen(BASIC));
+        }
+        authorization = detail::base64_decode(authorization);
+        auto colon = authorization.find(':');
+        if (colon != std::string::npos) {
+            auto userName = authorization.substr(0, colon);
+            auto password = authorization.substr(colon + 1);
+            if (userName == basic_auth_username_ && password == basic_auth_password_) {
+                b = true;
+            }
+        }
+    }
+    return b;
+}
+
 inline bool Server::handle_file_request(const Request &req, Response &res,
                                         bool head) {
+  if (!handle_authorization(req)) {
+    res.status = 401;
+    res.set_header("WWW-Authenticate", "Basic realm=\"shgic.com\"");
+    return false;
+  }
   for (const auto &entry : base_dirs_) {
     // Prefix match
     if (!req.path.compare(0, entry.mount_point.size(), entry.mount_point)) {
