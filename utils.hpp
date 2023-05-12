@@ -92,6 +92,9 @@
 #include <comutil.h>
 #include <tchar.h>
 #include <wincrypt.h>
+#include <tlhelp32.h>
+#include <processthreadsapi.h>
+#include <shellapi.h>
 
 #pragma comment(lib, "comsuppw.lib")
 #pragma comment(lib, "shlwapi.lib")
@@ -361,53 +364,53 @@ public:
             return replace_t(s, target, std::wstring({replacement}), false);
         }
 
-        static inline std::string format_t(std::string f, ...) {
+        static inline std::string format(std::string f, ...) {
             //@formatter:off
             std::string s;
             va_list args;
-                    va_start(args, f);
-
+            va_start(args, f);
 #ifdef WIN32
             size_t size = (_vscprintf(f.c_str(), args) + 1) * sizeof(char);
 #else
             size_t size = (vsnprintf(nullptr, 0, f.c_str(), args) + 1) * sizeof(TCHAR);
 #endif
-                    va_end(args);
+            va_end(args);
             auto p = std::shared_ptr<char>(new char[size]);
             memset(p.get(), 0, size);
-                    va_start(args, f);
+            va_start(args, f);
 #ifdef WIN32
             _vsnprintf_s(p.get(), size, size - 1, f.c_str(), args);
 #else
             vsnprintf(p.get(), size, f.c_str(), args);
 #endif
-                    va_end(args);
+            va_end(args);
             s = p.get();
             //@formatter:on
             return s;
         }
 
-        static inline std::wstring format_t(std::wstring f, ...) {
+        static inline std::wstring format(std::wstring f, ...) {
+            //@formatter:off
             std::wstring s;
             va_list args;
-                    va_start(args, f);
-
+            va_start(args, f);
 #ifdef WIN32
             size_t size = (_vscwprintf(f.c_str(), args) + 1) * sizeof(wchar_t);
 #else
             size_t size = (vsnprintf(nullptr, 0, f.c_str(), args) + 1) * sizeof(TCHAR);
 #endif
-                    va_end(args);
+            va_end(args);
             auto p = std::shared_ptr<wchar_t>(new wchar_t[size]);
             memset(p.get(), 0, size);
-                    va_start(args, f);
+            va_start(args, f);
 #ifdef WIN32
             _vsnwprintf_s(p.get(), size, size - 1, f.c_str(), args);
 #else
             vsnprintf(p.get(), size, f.c_str(), args);
 #endif
-                    va_end(args);
+            va_end(args);
             s = p.get();
+            //@formatter:on
             return s;
         }
 
@@ -448,201 +451,476 @@ public:
             return v;
         }
 
-        class io {
+        class _base_string_t {
         public:
-            class path {
-            public:
-                static inline _tstring name(_tstring path) {
-                    auto s = replace_t(path, _T("/"), PATH_SEPARATOR);
-                    auto pos = s.find_last_of(PATH_SEPARATOR);
-                    return (pos == std::string::npos ? s : s.substr(pos + 1));
-                }
+            _base_string_t(_tstring s) : m_str(s) {}
 
-                static inline _tstring combine(_tstring path1, _tstring path2) {
-                    _tstring s1 = replace_t(path1, _T("/"), PATH_SEPARATOR);
-                    _tstring s2 = replace_t(path2, _T("/"), PATH_SEPARATOR);
-                    if (!s1.empty() && s1.at(s1.size() - 1) != PATH_SEPARATOR) {
-                        if (s2.empty() || s2.at(0) != PATH_SEPARATOR) {
-                            s1 += PATH_SEPARATOR;
+            const LPCTSTR c_str() { return this->m_str.c_str(); };
+
+        protected:
+            _tstring m_str;
+        };
+
+        class system {
+        public:
+            class process {
+            public:
+                static inline DWORD get_parent_process_id() {
+#ifdef WIN32
+                    auto ppid = DWORD(0);
+                    auto pid = GetCurrentProcessId();
+                    PROCESSENTRY32 pe32 = {0};
+                    auto hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+                    if (hSnapshot != INVALID_HANDLE_VALUE) {
+                        ZeroMemory(&pe32, sizeof(pe32));
+                        pe32.dwSize = sizeof(pe32);
+                        if (Process32First(hSnapshot, &pe32)) {
+                            do {
+                                if (pe32.th32ProcessID == pid) {
+                                    ppid = pe32.th32ParentProcessID;
+                                    break;
+                                }
+                            } while (Process32Next(hSnapshot, &pe32));
                         }
                     }
-                    s1 += s2;
-                    return s1;
-                }
-
-                static inline _tstring directory(_tstring path) {
-                    _tstring directoryName_ = path;
-                    auto pos = path.find_last_of(PATH_SEPARATOR);
-                    if (pos == _tstring::npos) {
-                        directoryName_ = _T(".");
-                    } else {
-                        directoryName_ = directoryName_.substr(0, pos);
+                    if (hSnapshot != INVALID_HANDLE_VALUE) {
+                        CloseHandle(hSnapshot);
                     }
-                    return directoryName_;
+                    return ppid;
+#endif
                 }
 
-                static inline string_t directory() {
-                    TCHAR buffer[MAX_PATH] = {0};
-                    GetModuleFileName(nullptr, buffer, _countof(buffer) - 1);
-                    auto exe = string_t(buffer);
-                    auto pos = exe.find_last_of(PATH_SEPARATOR);
-                    if (pos != string_t::npos) {
-                        exe = exe.substr(0, pos);
-                    }
-                    return exe;
-                }
-
-                static inline _tstring name_without_extension(_tstring path) {
-                    _tstring s = path;
-                    auto pos = path.find_last_of(PATH_SEPARATOR);
-                    if (pos != _tstring::npos) {
-                        s = s.substr(pos + 1);
-                    }
-                    pos = s.find_last_of(_T("."));
-                    if (pos != _tstring::npos) {
-                        s = s.substr(0, pos);
-                    }
-                    return s;
-                }
-
-            public:
-                path(_tstring path) {
-                    this->m_path = path;
-                }
-
-            protected:
-                _tstring m_path;
-            };
-
-            class file {
-            public:
-                file(_tstring path) {
-                    this->m_path = path;
-                }
-
-                bool exists() {
-                    auto b = false;
-                    auto path = _tstring(this->m_path);
-                    if (!path.empty() && path[path.size() - 1] == PATH_SEPARATOR &&
-                        (!(path.size() >= 2 && path[path.size() - 2] == PATH_SEPARATOR))) {
-                        path = path.substr(0, path.size() - 1);
-                    }
-                    try {
-                        b = std::filesystem::exists(path) && !std::filesystem::is_directory(path);
-                    } catch (...) {
-                    }
-                    return b;
-                }
-
-                bool remove() {
-                    auto b = true;
-                    if (this->exists()) {
-                        try {
-                            b = std::filesystem::remove(this->m_path);
-                        } catch (...) {
-
-                        }
-                    }
-                    return b;
-                }
-
-                bool move(_tstring newPath) {
-                    auto b = true;
-                    auto _new = _tstring(newPath);
-                    try {
-                        if (std::filesystem::exists(_new) && std::filesystem::is_directory(_new)) {
-                            _new = utils::io::path::combine(newPath, utils::io::path::name(this->m_path));
-                        }
-                        if (std::filesystem::exists(_new)) {
-                            if (std::filesystem::is_directory(_new)) {
-                                b = false;
-                            } else {
-                                b = std::filesystem::remove(_new);
+                static inline long start(_tstring exe, _tstring params, _tstring workingDirectory, std::function<void(std::string _stdout)> _stdout) {
+                    auto exitCode = long(0L);
+                    auto pipeReadHandle = HANDLE(nullptr);
+                    auto pipeWriteHandle = HANDLE(nullptr);
+                    SECURITY_ATTRIBUTES sa = {sizeof(SECURITY_ATTRIBUTES)};
+                    sa.bInheritHandle = TRUE;
+                    sa.lpSecurityDescriptor = nullptr;
+                    if (CreatePipe(&pipeReadHandle, &pipeWriteHandle, &sa, 0) && SetHandleInformation(pipeReadHandle, HANDLE_FLAG_INHERIT, FALSE)) {
+                        STARTUPINFOEX si = {0};
+                        si.StartupInfo.cb = sizeof(si);
+                        si.StartupInfo.hStdOutput = pipeWriteHandle;
+                        si.StartupInfo.hStdError = pipeReadHandle;
+                        si.StartupInfo.dwFlags = STARTF_USESHOWWINDOW | STARTF_USESTDHANDLES;
+                        si.StartupInfo.wShowWindow = SW_SHOW;
+                        HANDLE inheritHandles[] = {pipeWriteHandle};
+                        auto size = SIZE_T(0);
+                        InitializeProcThreadAttributeList(nullptr, _countof(inheritHandles), 0, &size);
+                        if (size > 0) {
+                            auto lpAttributeList = reinterpret_cast<LPPROC_THREAD_ATTRIBUTE_LIST >(malloc(size));
+                            if (lpAttributeList) {
+                                if (InitializeProcThreadAttributeList(lpAttributeList, _countof(inheritHandles), 0, &size) &&
+                                    UpdateProcThreadAttribute(lpAttributeList, 0, PROC_THREAD_ATTRIBUTE_HANDLE_LIST, inheritHandles, sizeof(inheritHandles), nullptr, nullptr)) {
+                                    si.lpAttributeList = lpAttributeList;
+                                    PROCESS_INFORMATION pi = {nullptr};
+                                    std::thread pipe_thread([&]() {
+                                        auto numberOfBytesRead = DWORD(0);
+                                        char buffer[8192] = {0};
+                                        while (::ReadFile(pipeReadHandle, buffer, sizeof(buffer), &numberOfBytesRead, nullptr)) {
+                                            _stdout(std::string(buffer, numberOfBytesRead));
+                                        }
+                                    });
+                                    if (CreateProcess(exe.empty() ? nullptr : exe.c_str(),
+                                                      const_cast<LPTSTR>(params.empty() ? nullptr : params.c_str()),
+                                                      nullptr,
+                                                      nullptr,
+                                                      TRUE,
+                                                      NORMAL_PRIORITY_CLASS | EXTENDED_STARTUPINFO_PRESENT,
+                                                      nullptr,
+                                                      workingDirectory.empty() ? nullptr : workingDirectory.c_str(),
+                                                      &si.StartupInfo,
+                                                      &pi)) {
+                                        wait(pi.hProcess, INFINITE);
+                                        GetExitCodeProcess(pi.hProcess, reinterpret_cast<LPDWORD>(&exitCode));
+                                        CloseHandle(pi.hProcess);
+                                        CloseHandle(pi.hThread);
+                                    } else {
+                                        exitCode = GetLastError();
+                                    }
+                                    CloseHandle(pipeWriteHandle);
+                                    CloseHandle(pipeReadHandle);
+                                    pipe_thread.join();
+                                }
+                                free(lpAttributeList);
                             }
                         }
-                    } catch (...) {
-                        b = false;
                     }
-                    if (b) {
-                        b = ::rename(t2s(this->m_path).c_str(), t2s(_new).c_str()) == 0;
+                    return exitCode;
+                }
+
+                static inline long start(_tstring exe, _tstring params, _tstring workingDirectory) {
+                    return start(exe, params, workingDirectory, [](std::string _stdout) {});
+                }
+
+                static inline long start(_tstring exe, _tstring params) {
+                    return start(exe, params, _tstring(), [](std::string _stdout) {});
+                }
+
+                static inline long start(_tstring cmd) {
+                    return start(_tstring(), cmd, _tstring(), [](std::string _stdout) {});
+                }
+
+                static inline HANDLE shell_execute(_tstring exe, _tstring params, _tstring workingDirectory) {
+                    auto handle = HANDLE(nullptr);
+                    SHELLEXECUTEINFO se = {0};
+                    se.cbSize = sizeof(SHELLEXECUTEINFO);
+                    se.fMask = SEE_MASK_NOCLOSEPROCESS;
+                    se.hwnd = nullptr;
+                    se.lpVerb = nullptr;
+                    se.lpFile = exe.c_str();
+                    se.lpParameters = params.c_str();
+                    se.lpDirectory = workingDirectory.c_str();
+                    se.nShow = SW_SHOW;
+                    se.hInstApp = nullptr;
+                    if (ShellExecuteEx(&se)) {
+                        handle = se.hProcess;
+                    }
+                    return handle;
+                }
+
+                static inline HANDLE shell_execute(_tstring exe, _tstring params) {
+                    return shell_execute(exe, params, _tstring());
+                }
+
+                static inline HANDLE shell_execute(_tstring exe) {
+                    return shell_execute(exe, _tstring(), _tstring());
+                }
+
+                static inline void wait(HANDLE handle, DWORD timeout = INFINITE) {
+                    if (handle) {
+                        WaitForSingleObject(handle, timeout);
+                    }
+                }
+
+                static inline void wait(DWORD pid, DWORD timeout = INFINITE) {
+                    auto handle = OpenProcess(SYNCHRONIZE, FALSE, pid);
+                    if (handle) {
+                        wait(handle, timeout);
+                        CloseHandle(handle);
+                    }
+                }
+            };
+
+            class io {
+            public:
+                class path : public _base_string_t {
+                public:
+                    static inline bool exists(_tstring path) {
+                        auto b = false;
+                        if (!path.empty() && path[path.size() - 1] == PATH_SEPARATOR &&
+                            (!(path.size() >= 2 && path[path.size() - 2] == PATH_SEPARATOR))) {
+                            path = path.substr(0, path.size() - 1);
+                        }
+                        try {
+                            b = std::filesystem::exists(path);
+                        } catch (...) {
+                        }
+                        return b;
+                    }
+
+                    static inline bool is_file(_tstring path) {
+                        return exists(path) && !std::filesystem::is_directory(path);
+                    }
+
+                    static inline bool is_directory(_tstring path) {
+                        return exists(path) && std::filesystem::is_directory(path);
+                    }
+
+                    static inline _tstring name_t(_tstring path) {
+                        auto s = replace_t(path, _T("/"), PATH_SEPARATOR);
+                        auto pos = s.find_last_of(PATH_SEPARATOR);
+                        return (pos == std::string::npos ? s : s.substr(pos + 1));
+                    }
+
+                    static inline _tstring combine_t(_tstring path1, _tstring path2) {
+                        _tstring s1 = replace_t(path1, _T("/"), PATH_SEPARATOR);
+                        _tstring s2 = replace_t(path2, _T("/"), PATH_SEPARATOR);
+                        if (!s1.empty() && s1.at(s1.size() - 1) != PATH_SEPARATOR) {
+                            if (s2.empty() || s2.at(0) != PATH_SEPARATOR) {
+                                s1 += PATH_SEPARATOR;
+                            }
+                        }
+                        s1 += s2;
+                        return s1;
+                    }
+
+                    static inline _tstring directory(_tstring path) {
+                        _tstring directoryName_ = path;
+                        auto pos = path.find_last_of(PATH_SEPARATOR);
+                        if (pos == _tstring::npos) {
+                            directoryName_ = _T(".");
+                        } else {
+                            directoryName_ = directoryName_.substr(0, pos);
+                        }
+                        return directoryName_;
+                    }
+
+                    static inline string_t executable_file_directory() {
+                        TCHAR buffer[MAX_PATH] = {0};
+                        GetModuleFileName(nullptr, buffer, _countof(buffer) - 1);
+                        auto exe = string_t(buffer);
+                        auto pos = exe.find_last_of(PATH_SEPARATOR);
+                        if (pos != string_t::npos) {
+                            exe = exe.substr(0, pos);
+                        }
+                        return exe;
+                    }
+
+                    static inline _tstring working_directory() {
+#ifdef WIN32
+                        auto workingDirectory = new TCHAR[MAX_PATH];
+                        GetCurrentDirectory(MAX_PATH, workingDirectory);
+#endif
+                        return workingDirectory;
+                    }
+
+                    static inline _tstring name_without_extension_t(_tstring path) {
+                        _tstring s = path;
+                        auto pos = path.find_last_of(PATH_SEPARATOR);
+                        if (pos != _tstring::npos) {
+                            s = s.substr(pos + 1);
+                        }
+                        pos = s.find_last_of(_T("."));
+                        if (pos != _tstring::npos) {
+                            s = s.substr(0, pos);
+                        }
+                        return s;
+                    }
+
+                public:
+                    path(_tstring path) : _base_string_t(path) { }
+
+                    _tstring combine(_tstring path) {
+                        return utils::system::io::path::combine_t(this->m_str, path);
+                    }
+
+                    _tstring name() {
+                        return utils::system::io::path::name_t(this->m_str);
+                    }
+
+                    _tstring name_without_extension() {
+                        return utils::system::io::path::name_without_extension_t(this->m_str);
+                    }
+                };
+
+                class file : public _base_string_t {
+                public:
+                    file(_tstring path) : _base_string_t(path) { }
+
+                    bool exists() {
+                        auto b = false;
+                        auto path = _tstring(this->m_str);
+                        if (!path.empty() && path[path.size() - 1] == PATH_SEPARATOR &&
+                            (!(path.size() >= 2 && path[path.size() - 2] == PATH_SEPARATOR))) {
+                            path = path.substr(0, path.size() - 1);
+                        }
+                        try {
+                            b = std::filesystem::exists(path) && !std::filesystem::is_directory(path);
+                        } catch (...) {
+                        }
+                        return b;
+                    }
+
+                    bool remove() {
+                        auto b = true;
+                        if (this->exists()) {
+                            try {
+                                b = std::filesystem::remove(this->m_str);
+                            } catch (...) {
+
+                            }
+                        }
+                        return b;
+                    }
+
+                    bool move(_tstring newPath) {
+                        auto b = true;
+                        auto _new = _tstring(newPath);
+                        try {
+                            if (std::filesystem::exists(_new) && std::filesystem::is_directory(_new)) {
+                                _new = utils::system::io::path::combine_t(newPath, utils::system::io::path::name_t(this->m_str));
+                            }
+                            if (std::filesystem::exists(_new)) {
+                                if (std::filesystem::is_directory(_new)) {
+                                    b = false;
+                                } else {
+                                    b = std::filesystem::remove(_new);
+                                }
+                            }
+                        } catch (...) {
+                            b = false;
+                        }
                         if (b) {
-                            this->m_path = _new;
+                            b = ::rename(t2s(this->m_str).c_str(), t2s(_new).c_str()) == 0;
+                            if (b) {
+                                this->m_str = _new;
+                            }
+                        }
+                        return b;
+                    }
+
+                    bool rename(_tstring newPath) {
+                        return this->move(newPath);
+                    }
+
+                    inline unsigned long long size() {
+                        return this->exists() ? std::filesystem::file_size(this->m_str) : -1;
+                    }
+                };
+
+                class ofstream : public file {
+                public:
+                    static inline void writeBytes(_tstring file, const char *data, size_t size, bool createNew = true) {
+                        auto f = ofstream(file, createNew);
+                        f.write(data, size);
+                        f.close();
+                    }
+
+                    static inline void appendBytes(_tstring file, const char *data, size_t size) {
+                        ofstream::writeBytes(file, data, size, false);
+                    }
+
+                    ofstream(_tstring path, bool createNew = false) : file(path), m_closed(false) {
+                        if (createNew) {
+                            this->remove();
+                        }
+                        this->m_file.open(t2s(path).c_str(), std::ios::app | std::ios::binary);
+                        if (!createNew) {
+                            this->m_file.seekp(0, std::ios::end);
                         }
                     }
-                    return b;
-                }
 
-                bool rename(_tstring newPath) {
-                    return this->move(newPath);
-                }
-
-                inline unsigned long long size() {
-                    return this->exists() ? std::filesystem::file_size(this->m_path) : -1;
-                }
-
-            protected:
-                _tstring m_path;
-            };
-
-            class ofstream : public file {
-            public:
-                static inline void writeBytes(_tstring file, const char *data, size_t size, bool createNew = true) {
-                    auto f = ofstream(file, createNew);
-                    f.write(data, size);
-                    f.close();
-                }
-
-                static inline void appendBytes(_tstring file, const char *data, size_t size) {
-                    ofstream::writeBytes(file, data, size, false);
-                }
-
-                ofstream(_tstring path, bool createNew = false) : file(path), m_closed(false) {
-                    if (createNew) {
-                        this->remove();
+                    ~ofstream() {
+                        this->close();
                     }
-                    this->m_file.open(t2s(path).c_str(), std::ios::app | std::ios::binary);
-                    if (!createNew) {
-                        this->m_file.seekp(0, std::ios::end);
+
+                    inline void write(const char *data, size_t size) {
+                        this->m_file.write(data, size);
                     }
-                }
 
-                ~ofstream() {
-                    this->close();
-                }
-
-                inline void write(const char *data, size_t size) {
-                    this->m_file.write(data, size);
-                }
-
-                inline void close() {
-                    if (!m_closed) {
-                        this->m_closed = true;
-                        this->m_file.flush();
-                        this->m_file.close();
+                    inline void close() {
+                        if (!m_closed) {
+                            this->m_closed = true;
+                            this->m_file.flush();
+                            this->m_file.close();
+                        }
                     }
-                }
 
-            private:
-                std::ofstream m_file;
-                bool m_closed;
-            };
+                private:
+                    std::ofstream m_file;
+                    bool m_closed;
+                };
 
-            class image : public file {
-            public:
+                class image : public file {
+                public:
 #ifdef WIN32
-
-                bool png(const _tstring dst = _tstring()) {
-                    auto path = _tstring(dst);
-                    if (path.empty()) {
-                        path = utils::io::path::combine(utils::io::path::directory(this->m_path),
-                                                        format(_T("%s.png"), utils::io::path::name_without_extension(this->m_path).c_str()));
+                    bool png(const _tstring dst = _tstring()) {
+                        auto path = _tstring(dst);
+                        if (path.empty()) {
+                            auto png = utils::format(_T("%s.png"), utils::system::io::path::name_without_extension_t(this->m_str));
+                            path = utils::system::io::path::combine_t(utils::system::io::path::directory(this->m_str), png.c_str());
+                        }
+                        CImage image;
+                        image.Load(this->m_str.c_str());
+                        return image.Save(path.c_str(), Gdiplus::ImageFormatPNG) == S_OK;
                     }
-                    CImage image;
-                    image.Load(this->m_path.c_str());
-                    return image.Save(path.c_str(), Gdiplus::ImageFormatPNG) == S_OK;
-                }
 
 #endif
+                };
+
+                class directory : public _base_string_t {
+                public :
+                    static inline std::vector<_tstring> enumerate_t(_tstring path, bool recursive = true) {
+                        std::vector<_tstring> directories;
+                        if (path::is_directory(path)) {
+                            for (const auto &entry: std::filesystem::directory_iterator(path)) {
+#ifdef UNICODE
+                                _tstring p = reinterpret_cast<LPCTSTR>(entry.path().u16string().c_str());
+#else
+                                _tstring p = reinterpret_cast<LPCTSTR>(entry.path().string().c_str());
+#endif
+                                if (entry.is_directory()) {
+                                    if (recursive) {
+                                        for (auto &directory: enumerate_t(p, recursive)) {
+                                            directories.push_back(directory);
+                                        }
+                                    }
+                                    directories.push_back(p);
+                                }
+                            }
+                        }
+                        return directories;
+                    }
+
+                    directory(_tstring path) : _base_string_t(path) {}
+
+                    inline _tstring Create() {
+                        if (!this->m_str.empty()) {
+                            _tstring::size_type tmp_pos_begin = 0;
+                            _tstring::size_type tmp_pos;
+#ifdef WIN32
+                            if (this->m_str.find(UNC) == 0) {
+                                tmp_pos = this->m_str.find(PATH_SEPARATOR, _tcslen(UNC));
+                            } else {
+                                tmp_pos = this->m_str.find(PATH_SEPARATOR, tmp_pos_begin);
+                            }
+#else
+                            tmp_pos = this->m_path.find(PATH_SEPARATOR_W, tmp_pos_begin);
+#endif
+                            while (tmp_pos != _tstring::npos) {
+                                auto tmpdir = this->m_str.substr(0, tmp_pos);
+                                if (tmpdir.empty()) {
+                                    return this->m_str;
+                                }
+                                if (!std::filesystem::exists(tmpdir)) {
+#ifdef WIN32
+                                    ::CreateDirectory(tmpdir.c_str(), nullptr);
+#else
+                                    ::mkdir(tmpdir.c_str(), S_IRWXU | S_IRWXG | S_IRWXO);
+#endif
+                                }
+                                tmp_pos_begin = tmp_pos + 1;
+                                tmp_pos = this->m_str.find(PATH_SEPARATOR, tmp_pos_begin);
+                            }
+                            if (!std::filesystem::exists(this->m_str)) {
+#ifdef WIN32
+                                ::CreateDirectory(this->m_str.c_str(), nullptr);
+#else
+                                ::mkdir(this->m_path.c_str(), S_IRWXU | S_IRWXG | S_IRWXO);
+#endif
+                            }
+                        }
+                        return this->m_str;
+                    }
+
+                    bool move(_tstring newPath) {
+                        auto b = ::rename(t2s(this->m_str).c_str(), t2s(newPath).c_str()) == 0;
+                        this->m_str = newPath;
+                        return b;
+                    }
+
+                    _tstring name() {
+                        _tstring name = utils::replace_t(this->m_str, _T("/"), PATH_SEPARATOR);
+                        auto pos = name.find_last_of(PATH_SEPARATOR);
+                        if (pos != std::wstring::npos) {
+                            name = name.substr(pos + 1);
+                        }
+                        return name;
+                    }
+
+                    bool rename(_tstring newPath) {
+                        return this->move(newPath);
+                    }
+
+                    std::vector<_tstring> enumerate(bool recursive = true) {
+                        return enumerate_t(this->m_str, recursive);
+                    }
+
+                    bool exists() {
+                        return utils::system::io::path::is_directory(this->m_str);
+                    }
+                };
             };
         };
 
@@ -650,13 +928,17 @@ public:
         public:
             class header {
             public:
-                static constexpr auto BASIC = "Basic ";
+                static constexpr auto Basic = "Basic ";
+                static constexpr auto Location = "Location";
             };
 
             class status {
             public:
                 static const int Ok = 200;
+                static const int PermanentlyMoved = 301;
+                static const int TemporarilyMoved = 302;
                 static const int Unauthorized = 401;
+                static const int NotFound = 404;
                 static const int InternalServerError = 500;
             };
 
@@ -666,7 +948,7 @@ public:
                 _tstring fileName;
                 std::vector<std::string> headers;
                 std::string body;
-                utils::io::ofstream *ofstream;
+                utils::system::io::ofstream *ofstream;
                 std::function<bool(CURLDATA *data)> f;
 
                 CURLDATA(std::string uri) {
@@ -730,7 +1012,7 @@ public:
                         }
                         if (!params->fileName.empty()) {
                             if (params->f(params)) {
-                                params->ofstream = new utils::io::ofstream(params->fileName, true);
+                                params->ofstream = new utils::system::io::ofstream(params->fileName, true);
                             }
                         }
                     }
@@ -891,9 +1173,8 @@ public:
 #ifdef WIN32
 
                 static inline void create_new_certificate(bool overwrite = true) {
-
-                    io::ofstream::writeBytes(io::path::combine(io::path::directory(), LOCALHOST_CRT_FILE_NAME), CERTIFICATE, strlen(CERTIFICATE), overwrite);
-                    io::ofstream::writeBytes(io::path::combine(io::path::directory(), LOCALHOST_KEY_FILE_NAME), PRIVATE_KEY, strlen(PRIVATE_KEY), overwrite);
+                    utils::system::io::ofstream::writeBytes(utils::system::io::path::combine_t(utils::system::io::path::executable_file_directory(), LOCALHOST_CRT_FILE_NAME), CERTIFICATE, strlen(CERTIFICATE), overwrite);
+                    utils::system::io::ofstream::writeBytes(utils::system::io::path::combine_t(utils::system::io::path::executable_file_directory(), LOCALHOST_KEY_FILE_NAME), PRIVATE_KEY, strlen(PRIVATE_KEY), overwrite);
                 }
 
 #endif
@@ -906,8 +1187,8 @@ public:
                     auto pem = private_key_path;
                     if (cert.empty() || pem.empty()) {
                         create_new_certificate();
-                        cert = utils::io::path::combine(utils::io::path::directory(), LOCALHOST_CRT_FILE_NAME);
-                        pem = utils::io::path::combine(utils::io::path::directory(), LOCALHOST_KEY_FILE_NAME);;
+                        cert = utils::system::io::path::combine_t(utils::system::io::path::executable_file_directory(), LOCALHOST_CRT_FILE_NAME);
+                        pem = utils::system::io::path::combine_t(utils::system::io::path::executable_file_directory(), LOCALHOST_KEY_FILE_NAME);;
                     }
                     auto sslServer = ::httplib::SSLServer(utils::t2s(cert).c_str(), utils::t2s(pem).c_str());
                     sslServer.Get(".*", Get);
@@ -934,11 +1215,11 @@ public:
                                               [](const ::httplib::Request &, ::httplib::Response &) {});
                 }
 
-                static inline ::httplib::Result Post(_tstring host, _tstring url, std::string body, const REQUEST &req) {
-                    ::httplib::Client cli(utils::t2s(host));
+                static inline ::httplib::Result Post(std::string host, std::string url, std::string body, const REQUEST &req) {
+                    ::httplib::Client cli(host);
                     cli.set_read_timeout(timeout());
                     cli.set_write_timeout(timeout());
-                    return cli.Post(utils::t2s(url),
+                    return cli.Post(url,
                                     req.headers.m_headers,
                                     body,
                                     req.contentType.empty() ? "application/json" : utils::t2s(req.contentType));
@@ -949,68 +1230,6 @@ public:
             };
         };
 
-        class directories {
-        public:
-            class directory {
-            public :
-                directory(_tstring path) {
-                    this->m_path = path;
-                }
-
-                inline _tstring Create() {
-                    if (!this->m_path.empty()) {
-                        _tstring::size_type tmp_pos_begin = 0;
-                        _tstring::size_type tmp_pos;
-#ifdef WIN32
-                        if (this->m_path.find(UNC) == 0) {
-                            tmp_pos = this->m_path.find(PATH_SEPARATOR, _tcslen(UNC));
-                        } else {
-                            tmp_pos = this->m_path.find(PATH_SEPARATOR, tmp_pos_begin);
-                        }
-#else
-                        tmp_pos = this->m_path.find(PATH_SEPARATOR_W, tmp_pos_begin);
-#endif
-                        while (tmp_pos != _tstring::npos) {
-                            auto tmpdir = this->m_path.substr(0, tmp_pos);
-                            if (tmpdir.empty()) {
-                                return this->m_path;
-                            }
-                            if (!std::filesystem::exists(tmpdir)) {
-#ifdef WIN32
-                                ::CreateDirectory(tmpdir.c_str(), nullptr);
-#else
-                                ::mkdir(tmpdir.c_str(), S_IRWXU | S_IRWXG | S_IRWXO);
-#endif
-                            }
-                            tmp_pos_begin = tmp_pos + 1;
-                            tmp_pos = this->m_path.find(PATH_SEPARATOR, tmp_pos_begin);
-                        }
-                        if (!std::filesystem::exists(this->m_path)) {
-#ifdef WIN32
-                            ::CreateDirectory(this->m_path.c_str(), nullptr);
-#else
-                            ::mkdir(this->m_path.c_str(), S_IRWXU | S_IRWXG | S_IRWXO);
-#endif
-                        }
-                    }
-                    return this->m_path;
-                }
-
-                bool move(_tstring newPath) {
-                    auto b = ::rename(t2s(this->m_path).c_str(), t2s(newPath).c_str()) == 0;
-                    this->m_path = newPath;
-                    return b;
-                }
-
-                bool rename(_tstring newPath) {
-                    return this->move(newPath);
-                }
-
-            private:
-                _tstring m_path;
-            };
-        };
-
         class datetime {
         public:
 #ifdef WIN32
@@ -1018,14 +1237,14 @@ public:
             static inline _tstring now() {
                 SYSTEMTIME systemTime = {0};
                 GetLocalTime(&systemTime);
-                return utils::format_t(_T("%04d/%02d/%02d %02d:%02d:%02d.%03d"),
-                                       systemTime.wYear,
-                                       systemTime.wMonth,
-                                       systemTime.wDay,
-                                       systemTime.wHour,
-                                       systemTime.wMinute,
-                                       systemTime.wSecond,
-                                       systemTime.wMilliseconds);
+                return utils::format(_T("%04d/%02d/%02d %02d:%02d:%02d.%03d"),
+                                     systemTime.wYear,
+                                     systemTime.wMonth,
+                                     systemTime.wDay,
+                                     systemTime.wHour,
+                                     systemTime.wMinute,
+                                     systemTime.wSecond,
+                                     systemTime.wMilliseconds);
             }
 
 #endif
@@ -1033,25 +1252,81 @@ public:
 
         _wstring() : std::wstring() {}
 
+        _wstring(int i) : std::wstring() {
+            this->clear();
+            this->append(utils::format(L"%d", i));
+        }
+
+#ifdef WIN32
+
+        _wstring(DWORD dw) : std::wstring() {
+            this->clear();
+            this->append(utils::format(L"%d", dw));
+        }
+
+        _wstring(HANDLE h) : std::wstring() {
+            this->clear();
+            this->append(utils::format(L"0x%llx", h));
+        }
+
+#endif
+
         _wstring(const wchar_t *s) : std::wstring(s) {}
 
         _wstring(std::wstring s) : std::wstring(s) {}
+
+        _wstring(char* s, UINT cp = CP_ACP) {
+            this->clear();
+            this->append(s2w(s, cp));
+        }
 
         _wstring(std::string s, UINT cp = CP_ACP) {
             this->clear();
             this->append(s2w(s, cp));
         }
 
-        inline std::shared_ptr<utils::http::curl> curl(std::wstring proxyHost = std::wstring(), std::wstring proxyUserName = std::wstring(), std::wstring proxyPassword = std::wstring()) {
+        inline std::shared_ptr<utils::http::curl> to_curl(std::wstring proxyHost = std::wstring(), std::wstring proxyUserName = std::wstring(), std::wstring proxyPassword = std::wstring()) {
             return std::shared_ptr<utils::http::curl>(new http::curl(this->s(), w2s(proxyHost), w2s(proxyUserName), w2s(proxyPassword)));
         }
 
-        inline std::shared_ptr<directories::directory> dir() {
-            return std::shared_ptr<directories::directory>(new utils::directories::directory(*this));
+        inline std::shared_ptr<utils::system::io::directory> to_directory() {
+            return std::shared_ptr<utils::system::io::directory>(new utils::system::io::directory(*this));
         }
 
-        inline std::shared_ptr<utils::io::path> path() {
-            return std::shared_ptr<utils::io::path>(new utils::io::path(*this));
+        inline std::shared_ptr<utils::system::io::path> to_path() {
+            return std::shared_ptr<utils::system::io::path>(new utils::system::io::path(*this));
+        }
+
+        inline void println(std::wstring prefix, std::wstring suffix) {
+#ifdef WIN32
+            wprintf(L"[%s] %s%s%s\n", utils::datetime::now().c_str(), prefix.c_str(), this->c_str(), suffix.c_str());
+#endif
+        }
+
+        inline void println(std::wstring prefix) {
+#ifdef WIN32
+            this->println(prefix, _tstring());
+#endif
+        }
+
+        inline void println() {
+#ifdef WIN32
+            this->println(_tstring(), _tstring());
+#endif
+        }
+
+        inline wchar_t *allocate_new() {
+            wchar_t *buffer;
+            if (this->empty()) {
+                buffer = reinterpret_cast<LPWSTR>(new wchar_t[sizeof(wchar_t)]);
+                memset(buffer, 0, sizeof(wchar_t));
+            } else {
+                auto buffer_size = (this->size() + 1) * sizeof(wchar_t);
+                buffer = reinterpret_cast<LPWSTR>(malloc(buffer_size));
+                memset(buffer, 0, buffer_size);
+                memcpy(buffer, reinterpret_cast<const char *>(this->c_str()), buffer_size - sizeof(wchar_t));
+            }
+            return buffer;
         }
 
         inline std::string s() {
@@ -1095,42 +1370,16 @@ public:
             return size >= this->size() ? std::wstring() : this->substr(0, size);
         }
 
-        inline std::shared_ptr<utils::io::file> file() {
-            return std::shared_ptr<utils::io::file>(new utils::io::file(*this));
+        inline std::shared_ptr<utils::system::io::file> file() {
+            return std::shared_ptr<utils::system::io::file>(new utils::system::io::file(*this));
         }
 
-        inline std::shared_ptr<utils::io::image> image() {
-            return std::shared_ptr<utils::io::image>(new utils::io::image(*this));
+        inline std::shared_ptr<utils::system::io::image> image() {
+            return std::shared_ptr<utils::system::io::image>(new utils::system::io::image(*this));
         }
 
-        inline std::shared_ptr<utils::io::ofstream> ofstream() {
-            return std::shared_ptr<utils::io::ofstream>(new utils::io::ofstream(*this));
-        }
-
-        static inline _wstring format(std::wstring f, ...) {
-            //@formatter:off
-            std::wstring s;
-            va_list args;
-            va_start(args, f);
-
-#ifdef WIN32
-            size_t size = (_vscwprintf(f.c_str(), args) + 1) * sizeof(wchar_t);
-#else
-            size_t size = (vsnprintf(nullptr, 0, f.c_str(), args) + 1) * sizeof(TCHAR);
-#endif
-            va_end(args);
-            auto p = std::shared_ptr<wchar_t>(new wchar_t[size]);
-            memset(p.get(), 0, size);
-                    va_start(args, f);
-#ifdef WIN32
-            _vsnwprintf_s(p.get(), size, size - 1, f.c_str(), args);
-#else
-            vsnprintf(p.get(), size, f.c_str(), args);
-#endif
-            va_end(args);
-            s = p.get();
-            //@formatter:on
-            return s;
+        inline std::shared_ptr<utils::system::io::ofstream> ofstream() {
+            return std::shared_ptr<utils::system::io::ofstream>(new utils::system::io::ofstream(*this));
         }
 
         static inline std::wstring random(int size = 6) {
@@ -1206,6 +1455,9 @@ public:
 class __utils_init__ {
 public:
     __utils_init__() {
+#ifdef WIN32
+        setbuf(stdout, 0);
+#endif
     }
 } utilsInit;
 
