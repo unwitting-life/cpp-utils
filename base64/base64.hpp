@@ -55,7 +55,7 @@ namespace base64 {
         for (unsigned char c: data) {
             auto num_val = base64_chars.find(c);
             if (num_val != std::string::npos) {
-                offset = 18 - counter % 4 * 6;
+                offset = 18 - static_cast<size_t>(counter % 4) * 6;
                 bit_stream += num_val << offset;
                 if (offset == 12) {
                     decoded += static_cast<char>(bit_stream >> 16 & 0xff);

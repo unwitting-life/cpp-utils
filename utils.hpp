@@ -1,17 +1,21 @@
-﻿#ifndef UTILS_H
-#define UTILS_H
+﻿#pragma once
+
+#ifndef UNICODE
+#error "UNICODE ONLY"
+#endif
+
+#ifndef _WIN64
+#error "WINDOWS x64 ONLY"
+#endif
+
+#ifndef UTILS_HPP
+#define UTILS_HPP
 #pragma message ("* ********************************************************************************* *")
-#pragma message ("* URL    : https://github.com/unwitting-life/cpp-_utils                             *")
+#pragma message ("* URL    : https://github.com/unwitting-life/cpp-utils                              *")
 #pragma message ("* License: https://creativecommons.org/licenses/by-nc/4.0/                          *")
 #pragma message ("* Author : Yuanlei Huang                                                            *")
-#pragma message ("* Note   : This program only support with ISO C++20                                 *")
-#pragma message ("* Latest : 2023/05/09                                                               *")
+#pragma message ("* Latest : 2023/05/22                                                               *")
 #pragma message ("* ********************************************************************************* *")
-
-#ifdef _MSC_VER
-#ifndef WIN32
-#define WIN32
-#endif
 
 #include <atlimage.h>
 #include <WinSock2.h>
@@ -20,42 +24,23 @@
 
 #include <windows.h>
 
-#endif
 
-#ifdef UNICODE
-#define string_t _utils::_wstring
-#define _tstring std::wstring
+
+#define wstr _utils::_wstring
 #define stringstream_t std::wstringstream
 #define ofstream_t std::wofstream
-#else
-#define string_t _utils::_string
-#define _tstring std::string
-#define stringstream_t std::stringstream
-#define ofstream_t std::ofstream
-#endif
-#define utils string_t
+#define utils wstr
 
-#ifdef WIN32
-#define UNCw LR"(\\)"
+#define UNC_W LR"(\\)"
 #define UNC_A R"(\\)"
-#define PATH_SEPARATORW L'\\'
-#define PATH_SEPARATOR_STRINGW L"\\"
+#define PATH_SEPARATOR_W L'\\'
+#define PATH_SEPARATOR_STRING_W L"\\"
 #define PATH_SEPARATORA '\\'
 #define PATH_SEPARATOR_STRING_A "\\"
 
-#ifdef UNICODE
-#define UNC UNCw
-#define PATH_SEPARATOR PATH_SEPARATORW
-#define PATH_SEPARATOR_STRING PATH_SEPARATOR_STRINGW
-#else
-#define UNC UNC_A
-#define PATH_SEPARATOR PATH_SEPARATORA
-#define PATH_SEPARATOR_STRING PATH_SEPARATOR_STRING_A
-#endif
-#else
-#define PATH_SEPARATOR _T('/')
-#define PATH_SEPARATOR_STRING _T("\\")
-#endif
+#define UNC UNC_W
+#define PATH_SEPARATOR PATH_SEPARATOR_W
+#define PATH_SEPARATOR_STRING PATH_SEPARATOR_STRING_W
 
 // https://blog.csdn.net/panjunnn/article/details/115750622
 #ifdef _HAS_STD_BYTE
@@ -79,8 +64,6 @@
 #include <regex>
 #include <functional>
 
-#ifdef WIN32
-
 #include <iostream>
 #include <stdio.h>
 #include <conio.h>
@@ -102,13 +85,6 @@
 #pragma comment(lib, "Normaliz.lib")
 #pragma comment(lib, "wldap32.lib" )
 #pragma comment(lib, "crypt32.lib" )
-#pragma comment(lib, __FILE__ "/../curl/builds/libcurl-vc-x64-debug-static-ipv6-sspi-schannel/lib/libcurl_a_debug.lib")
-#else
-#define L
-#define _T(x) x
-#define TCHAR char
-#define _countof(x) (sizeof(x) / sizeof(x[0]))
-#endif
 
 #include "base64/base64.hpp"
 
@@ -172,18 +148,392 @@
                     "qSov5MqodQK1DhdgI10IfiuX\n"                                           \
                     "-----END PRIVATE KEY-----\n"
 #define CPPHTTPLIB_OPENSSL_SUPPORT
-
 #include "cpp-httplib/v0.11.4+/httplib.h"
-
-#ifdef WIN32
-#ifdef _WIN64
 #pragma comment(lib, __FILE__ "/../OpenSSL/3.0.6+/VC-WIN64A/lib/libcrypto.lib")
 #pragma comment(lib, __FILE__ "/../OpenSSL/3.0.6+/VC-WIN64A/lib/libssl.lib")
-#else
-#pragma comment(lib, __FILE__ "/../OpenSSL/3.0.6+/VC-WIN32/lib/libcrypto.lib")
-#pragma comment(lib, __FILE__ "/../OpenSSL/3.0.6+/VC-WIN32/lib/libssl.lib")
-#endif
-#endif
+#pragma comment(lib, __FILE__ "/../curl/builds/libcurl-vc-x64-release-dll-ipv6-sspi-schannel/lib/libcurl.lib")
+
+#define synchronsize(x) std::lock_guard<std::recursive_mutex> _recursive_mutex(*utils::system::threading::find_recursive_mutex((x)))
+
+static class __utils_init__ {
+public:
+    struct mime_entry {
+        std::wstring extension;
+        std::string name;
+        mime_entry(const wchar_t* extension, const char* name) {
+            this->extension = extension;
+            this->name = name;
+            if (this->extension.back() != L'\0') {
+                this->extension += L'\0';
+            }
+            if (this->name.back() != '\0') {
+                this->name += '\0';
+            }
+        }
+    };
+
+    __utils_init__() {
+        setbuf(stdout, 0);
+        this->http_timeout = CPPHTTPLIB_READ_TIMEOUT_SECOND;
+        this->init_mime_mime_types();
+    }
+
+    void init_mime_mime_types() {
+        mime_types.emplace_back(L".3gpp", "audio/3gpp");
+        mime_types.emplace_back(L".jpm", "video/jpm");
+        mime_types.emplace_back(L".mp3", "audio/mp3");
+        mime_types.emplace_back(L".rtf", "text/rtf");
+        mime_types.emplace_back(L".wav", "audio/wave");
+        mime_types.emplace_back(L".xml", "text/xml");
+        mime_types.emplace_back(L".3g2", "video/3gpp2");
+        mime_types.emplace_back(L".3gp", "video/3gpp");
+        mime_types.emplace_back(L".3gpp", "video/3gpp");
+        mime_types.emplace_back(L".ac", "application/pkix-attr-cert");
+        mime_types.emplace_back(L".adp", "audio/adpcm");
+        mime_types.emplace_back(L".ai", "application/postscript");
+        mime_types.emplace_back(L".apng", "image/apng");
+        mime_types.emplace_back(L".appcache", "text/cache-manifest");
+        mime_types.emplace_back(L".asc", "application/pgp-signature");
+        mime_types.emplace_back(L".atom", "application/atom+xml");
+        mime_types.emplace_back(L".atomcat", "application/atomcat+xml");
+        mime_types.emplace_back(L".atomsvc", "application/atomsvc+xml");
+        mime_types.emplace_back(L".au", "audio/basic");
+        mime_types.emplace_back(L".aw", "application/applixware");
+        mime_types.emplace_back(L".bdoc", "application/bdoc");
+        mime_types.emplace_back(L".bin", "application/octet-stream");
+        mime_types.emplace_back(L".bmp", "image/bmp");
+        mime_types.emplace_back(L".bpk", "application/octet-stream");
+        mime_types.emplace_back(L".buffer", "application/octet-stream");
+        mime_types.emplace_back(L".ccxml", "application/ccxml+xml");
+        mime_types.emplace_back(L".cdmia", "application/cdmi-capability");
+        mime_types.emplace_back(L".cdmic", "application/cdmi-container");
+        mime_types.emplace_back(L".cdmid", "application/cdmi-domain");
+        mime_types.emplace_back(L".cdmio", "application/cdmi-object");
+        mime_types.emplace_back(L".cdmiq", "application/cdmi-queue");
+        mime_types.emplace_back(L".cer", "application/pkix-cert");
+        mime_types.emplace_back(L".cgm", "image/cgm");
+        mime_types.emplace_back(L".class", "application/java-vm");
+        mime_types.emplace_back(L".coffee", "text/coffeescript");
+        mime_types.emplace_back(L".conf", "text/plain");
+        mime_types.emplace_back(L".cpt", "application/mac-compactpro");
+        mime_types.emplace_back(L".crl", "application/pkix-crl");
+        mime_types.emplace_back(L".css", "text/css");
+        mime_types.emplace_back(L".csv", "text/csv");
+        mime_types.emplace_back(L".cu", "application/cu-seeme");
+        mime_types.emplace_back(L".davmount", "application/davmount+xml");
+        mime_types.emplace_back(L".dbk", "application/docbook+xml");
+        mime_types.emplace_back(L".deb", "application/octet-stream");
+        mime_types.emplace_back(L".def", "text/plain");
+        mime_types.emplace_back(L".deploy", "application/octet-stream");
+        mime_types.emplace_back(L".disposition-notification", "message/disposition-notification");
+        mime_types.emplace_back(L".dist", "application/octet-stream");
+        mime_types.emplace_back(L".distz", "application/octet-stream");
+        mime_types.emplace_back(L".dll", "application/octet-stream");
+        mime_types.emplace_back(L".dmg", "application/octet-stream");
+        mime_types.emplace_back(L".dms", "application/octet-stream");
+        mime_types.emplace_back(L".doc", "application/msword");
+        mime_types.emplace_back(L".dot", "application/msword");
+        mime_types.emplace_back(L".drle", "image/dicom-rle");
+        mime_types.emplace_back(L".dssc", "application/dssc+der");
+        mime_types.emplace_back(L".dtd", "application/xml-dtd");
+        mime_types.emplace_back(L".dump", "application/octet-stream");
+        mime_types.emplace_back(L".ear", "application/java-archive");
+        mime_types.emplace_back(L".ecma", "application/ecmascript");
+        mime_types.emplace_back(L".elc", "application/octet-stream");
+        mime_types.emplace_back(L".emf", "image/emf");
+        mime_types.emplace_back(L".eml", "message/rfc822");
+        mime_types.emplace_back(L".emma", "application/emma+xml");
+        mime_types.emplace_back(L".eps", "application/postscript");
+        mime_types.emplace_back(L".epub", "application/epub+zip");
+        mime_types.emplace_back(L".es", "application/ecmascript");
+        mime_types.emplace_back(L".exe", "application/octet-stream");
+        mime_types.emplace_back(L".exi", "application/exi");
+        mime_types.emplace_back(L".exr", "image/aces");
+        mime_types.emplace_back(L".ez", "application/andrew-inset");
+        mime_types.emplace_back(L".fits", "image/fits");
+        mime_types.emplace_back(L".g3", "image/g3fax");
+        mime_types.emplace_back(L".gbr", "application/rpki-ghostbusters");
+        mime_types.emplace_back(L".geojson", "application/geo+json");
+        mime_types.emplace_back(L".gif", "image/gif");
+        mime_types.emplace_back(L".glb", "model/gltf-binary");
+        mime_types.emplace_back(L".gltf", "model/gltf+json");
+        mime_types.emplace_back(L".gml", "application/gml+xml");
+        mime_types.emplace_back(L".gpx", "application/gpx+xml");
+        mime_types.emplace_back(L".gram", "application/srgs");
+        mime_types.emplace_back(L".grxml", "application/srgs+xml");
+        mime_types.emplace_back(L".gxf", "application/gxf");
+        mime_types.emplace_back(L".gz", "application/gzip");
+        mime_types.emplace_back(L".h261", "video/h261");
+        mime_types.emplace_back(L".h263", "video/h263");
+        mime_types.emplace_back(L".h264", "video/h264");
+        mime_types.emplace_back(L".heic", "image/heic");
+        mime_types.emplace_back(L".heics", "image/heic-sequence");
+        mime_types.emplace_back(L".heif", "image/heif");
+        mime_types.emplace_back(L".heifs", "image/heif-sequence");
+        mime_types.emplace_back(L".hjson", "application/hjson");
+        mime_types.emplace_back(L".hlp", "application/winhlp");
+        mime_types.emplace_back(L".hqx", "application/mac-binhex40");
+        mime_types.emplace_back(L".htm", "text/html");
+        mime_types.emplace_back(L".html", "text/html");
+        mime_types.emplace_back(L".ico", "image/x-icon");
+        mime_types.emplace_back(L".ics", "text/calendar");
+        mime_types.emplace_back(L".ief", "image/ief");
+        mime_types.emplace_back(L".ifb", "text/calendar");
+        mime_types.emplace_back(L".iges", "model/iges");
+        mime_types.emplace_back(L".igs", "model/iges");
+        mime_types.emplace_back(L".img", "application/octet-stream");
+        mime_types.emplace_back(L".in", "text/plain");
+        mime_types.emplace_back(L".ini", "text/plain");
+        mime_types.emplace_back(L".ink", "application/inkml+xml");
+        mime_types.emplace_back(L".inkml", "application/inkml+xml");
+        mime_types.emplace_back(L".ipfix", "application/ipfix");
+        mime_types.emplace_back(L".iso", "application/octet-stream");
+        mime_types.emplace_back(L".jade", "text/jade");
+        mime_types.emplace_back(L".jar", "application/java-archive");
+        mime_types.emplace_back(L".jls", "image/jls");
+        mime_types.emplace_back(L".jp2", "image/jp2");
+        mime_types.emplace_back(L".jpe", "image/jpeg");
+        mime_types.emplace_back(L".jpeg", "image/jpeg");
+        mime_types.emplace_back(L".jpf", "image/jpx");
+        mime_types.emplace_back(L".jpg", "image/jpeg");
+        mime_types.emplace_back(L".jpg2", "image/jp2");
+        mime_types.emplace_back(L".jpgm", "video/jpm");
+        mime_types.emplace_back(L".jpgv", "video/jpeg");
+        mime_types.emplace_back(L".jpm", "image/jpm");
+        mime_types.emplace_back(L".jpx", "image/jpx");
+        mime_types.emplace_back(L".js", "application/javascript");
+        mime_types.emplace_back(L".json", "application/json");
+        mime_types.emplace_back(L".json5", "application/json5");
+        mime_types.emplace_back(L".jsonld", "application/ld+json");
+        mime_types.emplace_back(L".jsonml", "application/jsonml+json");
+        mime_types.emplace_back(L".jsx", "text/jsx");
+        mime_types.emplace_back(L".kar", "audio/midi");
+        mime_types.emplace_back(L".ktx", "image/ktx");
+        mime_types.emplace_back(L".less", "text/less");
+        mime_types.emplace_back(L".list", "text/plain");
+        mime_types.emplace_back(L".litcoffee", "text/coffeescript");
+        mime_types.emplace_back(L".log", "text/plain");
+        mime_types.emplace_back(L".lostxml", "application/lost+xml");
+        mime_types.emplace_back(L".lrf", "application/octet-stream");
+        mime_types.emplace_back(L".m1v", "video/mpeg");
+        mime_types.emplace_back(L".m21", "application/mp21");
+        mime_types.emplace_back(L".m2a", "audio/mpeg");
+        mime_types.emplace_back(L".m2v", "video/mpeg");
+        mime_types.emplace_back(L".m3a", "audio/mpeg");
+        mime_types.emplace_back(L".m4a", "audio/mp4");
+        mime_types.emplace_back(L".m4p", "application/mp4");
+        mime_types.emplace_back(L".ma", "application/mathematica");
+        mime_types.emplace_back(L".mads", "application/mads+xml");
+        mime_types.emplace_back(L".man", "text/troff");
+        mime_types.emplace_back(L".manifest", "text/cache-manifest");
+        mime_types.emplace_back(L".map", "application/json");
+        mime_types.emplace_back(L".mar", "application/octet-stream");
+        mime_types.emplace_back(L".markdown", "text/markdown");
+        mime_types.emplace_back(L".mathml", "application/mathml+xml");
+        mime_types.emplace_back(L".mb", "application/mathematica");
+        mime_types.emplace_back(L".mbox", "application/mbox");
+        mime_types.emplace_back(L".md", "text/markdown");
+        mime_types.emplace_back(L".me", "text/troff");
+        mime_types.emplace_back(L".mesh", "model/mesh");
+        mime_types.emplace_back(L".meta4", "application/metalink4+xml");
+        mime_types.emplace_back(L".metalink", "application/metalink+xml");
+        mime_types.emplace_back(L".mets", "application/mets+xml");
+        mime_types.emplace_back(L".mft", "application/rpki-manifest");
+        mime_types.emplace_back(L".mid", "audio/midi");
+        mime_types.emplace_back(L".midi", "audio/midi");
+        mime_types.emplace_back(L".mime", "message/rfc822");
+        mime_types.emplace_back(L".mj2", "video/mj2");
+        mime_types.emplace_back(L".mjp2", "video/mj2");
+        mime_types.emplace_back(L".mjs", "application/javascript");
+        mime_types.emplace_back(L".mml", "text/mathml");
+        mime_types.emplace_back(L".mods", "application/mods+xml");
+        mime_types.emplace_back(L".mov", "video/quicktime");
+        mime_types.emplace_back(L".mp2", "audio/mpeg");
+        mime_types.emplace_back(L".mp21", "application/mp21");
+        mime_types.emplace_back(L".mp2a", "audio/mpeg");
+        mime_types.emplace_back(L".mp3", "audio/mpeg");
+        mime_types.emplace_back(L".mp4", "video/mp4");
+        mime_types.emplace_back(L".mp4a", "audio/mp4");
+        mime_types.emplace_back(L".mp4s", "application/mp4");
+        mime_types.emplace_back(L".mp4v", "video/mp4");
+        mime_types.emplace_back(L".mpd", "application/dash+xml");
+        mime_types.emplace_back(L".mpe", "video/mpeg");
+        mime_types.emplace_back(L".mpeg", "video/mpeg");
+        mime_types.emplace_back(L".mpg", "video/mpeg");
+        mime_types.emplace_back(L".mpg4", "video/mp4");
+        mime_types.emplace_back(L".mpga", "audio/mpeg");
+        mime_types.emplace_back(L".mrc", "application/marc");
+        mime_types.emplace_back(L".mrcx", "application/marcxml+xml");
+        mime_types.emplace_back(L".ms", "text/troff");
+        mime_types.emplace_back(L".mscml", "application/mediaservercontrol+xml");
+        mime_types.emplace_back(L".msh", "model/mesh");
+        mime_types.emplace_back(L".msi", "application/octet-stream");
+        mime_types.emplace_back(L".msm", "application/octet-stream");
+        mime_types.emplace_back(L".msp", "application/octet-stream");
+        mime_types.emplace_back(L".mxf", "application/mxf");
+        mime_types.emplace_back(L".mxml", "application/xv+xml");
+        mime_types.emplace_back(L".n3", "text/n3");
+        mime_types.emplace_back(L".nb", "application/mathematica");
+        mime_types.emplace_back(L".oda", "application/oda");
+        mime_types.emplace_back(L".oga", "audio/ogg");
+        mime_types.emplace_back(L".ogg", "audio/ogg");
+        mime_types.emplace_back(L".ogv", "video/ogg");
+        mime_types.emplace_back(L".ogx", "application/ogg");
+        mime_types.emplace_back(L".omdoc", "application/omdoc+xml");
+        mime_types.emplace_back(L".onepkg", "application/onenote");
+        mime_types.emplace_back(L".onetmp", "application/onenote");
+        mime_types.emplace_back(L".onetoc", "application/onenote");
+        mime_types.emplace_back(L".onetoc2", "application/onenote");
+        mime_types.emplace_back(L".opf", "application/oebps-package+xml");
+        mime_types.emplace_back(L".otf", "font/otf");
+        mime_types.emplace_back(L".owl", "application/rdf+xml");
+        mime_types.emplace_back(L".oxps", "application/oxps");
+        mime_types.emplace_back(L".p10", "application/pkcs10");
+        mime_types.emplace_back(L".p7c", "application/pkcs7-mime");
+        mime_types.emplace_back(L".p7m", "application/pkcs7-mime");
+        mime_types.emplace_back(L".p7s", "application/pkcs7-signature");
+        mime_types.emplace_back(L".p8", "application/pkcs8");
+        mime_types.emplace_back(L".pdf", "application/pdf");
+        mime_types.emplace_back(L".pfr", "application/font-tdpfr");
+        mime_types.emplace_back(L".pgp", "application/pgp-encrypted");
+        mime_types.emplace_back(L".pkg", "application/octet-stream");
+        mime_types.emplace_back(L".pki", "application/pkixcmp");
+        mime_types.emplace_back(L".pkipath", "application/pkix-pkipath");
+        mime_types.emplace_back(L".pls", "application/pls+xml");
+        mime_types.emplace_back(L".png", "image/png");
+        mime_types.emplace_back(L".prf", "application/pics-rules");
+        mime_types.emplace_back(L".ps", "application/postscript");
+        mime_types.emplace_back(L".pskcxml", "application/pskc+xml");
+        mime_types.emplace_back(L".qt", "video/quicktime");
+        mime_types.emplace_back(L".raml", "application/raml+yaml");
+        mime_types.emplace_back(L".rdf", "application/rdf+xml");
+        mime_types.emplace_back(L".rif", "application/reginfo+xml");
+        mime_types.emplace_back(L".rl", "application/resource-lists+xml");
+        mime_types.emplace_back(L".rld", "application/resource-lists-diff+xml");
+        mime_types.emplace_back(L".rmi", "audio/midi");
+        mime_types.emplace_back(L".rnc", "application/relax-ng-compact-syntax");
+        mime_types.emplace_back(L".rng", "application/xml");
+        mime_types.emplace_back(L".roa", "application/rpki-roa");
+        mime_types.emplace_back(L".roff", "text/troff");
+        mime_types.emplace_back(L".rq", "application/sparql-query");
+        mime_types.emplace_back(L".rs", "application/rls-services+xml");
+        mime_types.emplace_back(L".rsd", "application/rsd+xml");
+        mime_types.emplace_back(L".rss", "application/rss+xml");
+        mime_types.emplace_back(L".rtf", "application/rtf");
+        mime_types.emplace_back(L".rtx", "text/richtext");
+        mime_types.emplace_back(L".s3m", "audio/s3m");
+        mime_types.emplace_back(L".sbml", "application/sbml+xml");
+        mime_types.emplace_back(L".scq", "application/scvp-cv-request");
+        mime_types.emplace_back(L".scs", "application/scvp-cv-response");
+        mime_types.emplace_back(L".sdp", "application/sdp");
+        mime_types.emplace_back(L".ser", "application/java-serialized-object");
+        mime_types.emplace_back(L".setpay", "application/set-payment-initiation");
+        mime_types.emplace_back(L".setreg", "application/set-registration-initiation");
+        mime_types.emplace_back(L".sgi", "image/sgi");
+        mime_types.emplace_back(L".sgm", "text/sgml");
+        mime_types.emplace_back(L".sgml", "text/sgml");
+        mime_types.emplace_back(L".shex", "text/shex");
+        mime_types.emplace_back(L".shf", "application/shf+xml");
+        mime_types.emplace_back(L".shtml", "text/html");
+        mime_types.emplace_back(L".sig", "application/pgp-signature");
+        mime_types.emplace_back(L".sil", "audio/silk");
+        mime_types.emplace_back(L".silo", "model/mesh");
+        mime_types.emplace_back(L".slim", "text/slim");
+        mime_types.emplace_back(L".slm", "text/slim");
+        mime_types.emplace_back(L".smi", "application/smil+xml");
+        mime_types.emplace_back(L".smil", "application/smil+xml");
+        mime_types.emplace_back(L".snd", "audio/basic");
+        mime_types.emplace_back(L".so", "application/octet-stream");
+        mime_types.emplace_back(L".spp", "application/scvp-vp-response");
+        mime_types.emplace_back(L".spq", "application/scvp-vp-request");
+        mime_types.emplace_back(L".spx", "audio/ogg");
+        mime_types.emplace_back(L".sru", "application/sru+xml");
+        mime_types.emplace_back(L".srx", "application/sparql-results+xml");
+        mime_types.emplace_back(L".ssdl", "application/ssdl+xml");
+        mime_types.emplace_back(L".ssml", "application/ssml+xml");
+        mime_types.emplace_back(L".stk", "application/hyperstudio");
+        mime_types.emplace_back(L".styl", "text/stylus");
+        mime_types.emplace_back(L".stylus", "text/stylus");
+        mime_types.emplace_back(L".svg", "image/svg+xml");
+        mime_types.emplace_back(L".svgz", "image/svg+xml");
+        mime_types.emplace_back(L".t", "text/troff");
+        mime_types.emplace_back(L".t38", "image/t38");
+        mime_types.emplace_back(L".tei", "application/tei+xml");
+        mime_types.emplace_back(L".teicorpus", "application/tei+xml");
+        mime_types.emplace_back(L".text", "text/plain");
+        mime_types.emplace_back(L".tfi", "application/thraud+xml");
+        mime_types.emplace_back(L".tfx", "image/tiff-fx");
+        mime_types.emplace_back(L".tif", "image/tiff");
+        mime_types.emplace_back(L".tiff", "image/tiff");
+        mime_types.emplace_back(L".tr", "text/troff");
+        mime_types.emplace_back(L".ts", "video/mp2t");
+        mime_types.emplace_back(L".tsd", "application/timestamped-data");
+        mime_types.emplace_back(L".tsv", "text/tab-separated-values");
+        mime_types.emplace_back(L".ttc", "font/collection");
+        mime_types.emplace_back(L".ttf", "font/ttf");
+        mime_types.emplace_back(L".ttl", "text/turtle");
+        mime_types.emplace_back(L".txt", "text/plain");
+        mime_types.emplace_back(L".u8dsn", "message/global-delivery-status");
+        mime_types.emplace_back(L".u8hdr", "message/global-headers");
+        mime_types.emplace_back(L".u8mdn", "message/global-disposition-notification");
+        mime_types.emplace_back(L".u8msg", "message/global");
+        mime_types.emplace_back(L".uri", "text/uri-list");
+        mime_types.emplace_back(L".uris", "text/uri-list");
+        mime_types.emplace_back(L".urls", "text/uri-list");
+        mime_types.emplace_back(L".vcard", "text/vcard");
+        mime_types.emplace_back(L".vrml", "model/vrml");
+        mime_types.emplace_back(L".vtt", "text/vtt");
+        mime_types.emplace_back(L".vxml", "application/voicexml+xml");
+        mime_types.emplace_back(L".war", "application/java-archive");
+        mime_types.emplace_back(L".wasm", "application/wasm");
+        mime_types.emplace_back(L".wav", "audio/wav");
+        mime_types.emplace_back(L".weba", "audio/webm");
+        mime_types.emplace_back(L".webm", "video/webm");
+        mime_types.emplace_back(L".webmanifest", "application/manifest+json");
+        mime_types.emplace_back(L".webp", "image/webp");
+        mime_types.emplace_back(L".wgt", "application/widget");
+        mime_types.emplace_back(L".wmf", "image/wmf");
+        mime_types.emplace_back(L".woff", "font/woff");
+        mime_types.emplace_back(L".woff2", "font/woff2");
+        mime_types.emplace_back(L".wrl", "model/vrml");
+        mime_types.emplace_back(L".wsdl", "application/wsdl+xml");
+        mime_types.emplace_back(L".wspolicy", "application/wspolicy+xml");
+        mime_types.emplace_back(L".x3d", "model/x3d+xml");
+        mime_types.emplace_back(L".x3db", "model/x3d+binary");
+        mime_types.emplace_back(L".x3dbz", "model/x3d+binary");
+        mime_types.emplace_back(L".x3dv", "model/x3d+vrml");
+        mime_types.emplace_back(L".x3dvz", "model/x3d+vrml");
+        mime_types.emplace_back(L".x3dz", "model/x3d+xml");
+        mime_types.emplace_back(L".xaml", "application/xaml+xml");
+        mime_types.emplace_back(L".xdf", "application/xcap-diff+xml");
+        mime_types.emplace_back(L".xdssc", "application/dssc+xml");
+        mime_types.emplace_back(L".xenc", "application/xenc+xml");
+        mime_types.emplace_back(L".xer", "application/patch-ops-error+xml");
+        mime_types.emplace_back(L".xht", "application/xhtml+xml");
+        mime_types.emplace_back(L".xhtml", "application/xhtml+xml");
+        mime_types.emplace_back(L".xhvml", "application/xv+xml");
+        mime_types.emplace_back(L".xm", "audio/xm");
+        mime_types.emplace_back(L".xml", "application/xml");
+        mime_types.emplace_back(L".xop", "application/xop+xml");
+        mime_types.emplace_back(L".xpl", "application/xproc+xml");
+        mime_types.emplace_back(L".xsd", "application/xml");
+        mime_types.emplace_back(L".xsl", "application/xml");
+        mime_types.emplace_back(L".xslt", "application/xslt+xml");
+        mime_types.emplace_back(L".xspf", "application/xspf+xml");
+        mime_types.emplace_back(L".xvm", "application/xv+xml");
+        mime_types.emplace_back(L".xvml", "application/xv+xml");
+        mime_types.emplace_back(L".yaml", "text/yaml");
+        mime_types.emplace_back(L".yang", "application/yang");
+        mime_types.emplace_back(L".yin", "application/yin+xml");
+        mime_types.emplace_back(L".yml", "text/yaml");
+        mime_types.emplace_back(L".zip", "application/zip");
+    }
+
+    int http_timeout;
+    std::vector<mime_entry> mime_types;
+    std::recursive_mutex mutex_singleton;
+    std::unordered_map<std::wstring, std::recursive_mutex*> mutexes;
+} _utils_init_;
 
 class _utils {
 public:
@@ -192,7 +542,6 @@ public:
         static inline std::wstring s2w(std::string s, UINT cp = CP_ACP) {
             std::wstring w;
             if (!s.empty()) {
-#ifdef WIN32
                 auto size = MultiByteToWideChar(cp, 0, s.c_str(), -1, nullptr, 0);
                 if (size) {
                     auto p = std::shared_ptr<wchar_t>(new wchar_t[size + 1]);
@@ -200,33 +549,11 @@ public:
                     MultiByteToWideChar(cp, 0, s.c_str(), -1, p.get(), size);
                     w.append(p.get(), size);
                 }
-#else
-                size_t size;
-            pos = s.find(static_cast<char>(0), begin);
-            while (pos != std::string::npos) {
-                auto segment = std::string(&s[begin], pos - begin);
-                auto converted = std::wstring(segment.size(), 0);
-                size = mbstowcs(&converted[0], &segment[0], converted.size());
-                converted.resize(size);
-                w.append(converted);
-                w.append({ 0 });
-                begin = pos + 1;
-                pos = s.find(static_cast<char>(0), begin);
-            }
-            if (begin < s.length()) {
-                auto segment = std::string(&(*this)[begin], s.length() - begin);
-                auto converted = std::wstring(segment.size(), 0);
-                size = mbstowcs(&converted[0], &segment[0], converted.size());
-                converted.resize(size);
-                w.append(converted);
-            }
-#endif
             }
             return w;
         }
 
         static inline std::string w2s(std::wstring w) {
-#ifdef WIN32
             auto s = std::string();
             if (!w.empty()) {
                 auto size = WideCharToMultiByte(CP_ACP, 0, w.c_str(), -1, nullptr, 0, nullptr, nullptr);
@@ -238,10 +565,6 @@ public:
                 }
             }
             return s;
-#else
-            std::wstring_convert<std::codecvt_utf8<wchar_t>, wchar_t> convert;
-        return convert.to_bytes(s);
-#endif
         }
 
         static inline std::string t2s(std::wstring s) {
@@ -252,23 +575,15 @@ public:
             return s;
         }
 
-        static inline _tstring t2t(std::wstring s) {
-#ifdef UNICODE
+        static inline std::wstring t2t(std::wstring s) {
             return s;
-#else
-            return s2w(s);
-#endif
         }
 
-        static inline _tstring t2t(std::string s) {
-#ifdef UNICODE
+        static inline std::wstring t2t(std::string s) {
             return s2w(s);
-#else
-            return s;
-#endif
         }
 
-        static inline std::string replace_t(std::string s, const std::string target, const std::string replacement, bool once) {
+        static inline std::string _replace(std::string s, const std::string target, const std::string replacement, bool once) {
             if (s.empty() || target.empty()) {
                 return s;
             }
@@ -306,19 +621,7 @@ public:
             return s;
         }
 
-        static inline std::string replace_t(std::string s, const std::string target, const std::string replacement) {
-            return replace_t(s, target, replacement, false);
-        }
-
-        static inline std::string replace_t(std::string s, const char *target, const char replacement) {
-            return replace_t(s, target, std::string({replacement}), false);
-        }
-
-        static inline std::string replace_t(std::string s, const char target, const char replacement) {
-            return replace_t(s, std::string({target}), std::string({replacement}), false);
-        }
-
-        static inline std::wstring replace_t(std::wstring s, const std::wstring target, const std::wstring replacement, bool once) {
+        static inline std::wstring _replace(std::wstring s, const std::wstring target, const std::wstring replacement, bool once) {
             if (s.empty() || target.empty()) {
                 return s;
             }
@@ -356,12 +659,16 @@ public:
             return s;
         }
 
-        static inline std::wstring replace_t(std::wstring s, const std::wstring target, const std::wstring replacement) {
-            return replace_t(s, target, replacement, false);
+        static inline std::wstring _replace(std::wstring s, const std::wstring target, const std::wstring replacement) {
+            return _replace(s, target, replacement, false);
         }
 
-        static inline std::wstring replace_t(std::wstring s, const wchar_t *target, const wchar_t replacement) {
-            return replace_t(s, target, std::wstring({replacement}), false);
+        static inline std::wstring _replace(std::wstring s, const wchar_t *target, const wchar_t replacement) {
+            return _replace(s, target, std::wstring({replacement}), false);
+        }
+
+        static inline std::wstring _replace(std::wstring s, const wchar_t find, const wchar_t replacement) {
+            return _replace(s, std::wstring({ find }), std::wstring({ replacement }), false);
         }
 
         static inline std::string format(std::string f, ...) {
@@ -369,20 +676,12 @@ public:
             std::string s;
             va_list args;
             va_start(args, f);
-#ifdef WIN32
             size_t size = (_vscprintf(f.c_str(), args) + 1) * sizeof(char);
-#else
-            size_t size = (vsnprintf(nullptr, 0, f.c_str(), args) + 1) * sizeof(TCHAR);
-#endif
             va_end(args);
             auto p = std::shared_ptr<char>(new char[size]);
             memset(p.get(), 0, size);
             va_start(args, f);
-#ifdef WIN32
             _vsnprintf_s(p.get(), size, size - 1, f.c_str(), args);
-#else
-            vsnprintf(p.get(), size, f.c_str(), args);
-#endif
             va_end(args);
             s = p.get();
             //@formatter:on
@@ -394,20 +693,12 @@ public:
             std::wstring s;
             va_list args;
             va_start(args, f);
-#ifdef WIN32
             size_t size = (_vscwprintf(f.c_str(), args) + 1) * sizeof(wchar_t);
-#else
-            size_t size = (vsnprintf(nullptr, 0, f.c_str(), args) + 1) * sizeof(TCHAR);
-#endif
             va_end(args);
             auto p = std::shared_ptr<wchar_t>(new wchar_t[size]);
             memset(p.get(), 0, size);
             va_start(args, f);
-#ifdef WIN32
             _vsnwprintf_s(p.get(), size, size - 1, f.c_str(), args);
-#else
-            vsnprintf(p.get(), size, f.c_str(), args);
-#endif
             va_end(args);
             s = p.get();
             //@formatter:on
@@ -451,14 +742,62 @@ public:
             return v;
         }
 
-        class _base_string_t {
-        public:
-            _base_string_t(_tstring s) : m_str(s) {}
+        static inline int _atoi(std::string s) {
+            std::string number;
+            for (auto& e : s) {
+                if (e >= '0' && e <= '9') {
+                    number += e;
+                }
+            }
+            return ::atoi(number.c_str());
+        }
 
-            const LPCTSTR c_str() { return this->m_str.c_str(); };
+        static inline int _wtoi(std::wstring s) {
+            std::wstring number;
+            for (auto& e : s) {
+                if (e >= L'0' && e <= L'9') {
+                    number += e;
+                }
+            }
+            return ::_wtoi(number.c_str());
+        }
+
+        static inline std::wstring _lower(std::wstring s) {
+            auto upper = std::wstring(s);
+            std::transform(upper.begin(), upper.end(), upper.begin(), ::towlower);
+            return upper;
+        }
+
+        static inline std::string _lower(std::string s) {
+            auto upper = std::string(s);
+            std::transform(upper.begin(), upper.end(), upper.begin(), ::tolower);
+            return upper;
+        }
+
+        static inline std::wstring _upper(std::wstring s) {
+            auto upper = std::wstring(s);
+            std::transform(upper.begin(), upper.end(), upper.begin(), ::towupper);
+            return upper;
+        }
+
+        class _base_wstring {
+        public:
+            _base_wstring(std::wstring s) : m_str(s) {}
+
+            const LPCWSTR c_str() { return this->m_str.c_str(); };
 
         protected:
-            _tstring m_str;
+            std::wstring m_str;
+        };
+
+        class _base_string {
+        public:
+            _base_string(std::string s) : m_str(s) {}
+
+            const LPCSTR c_str() { return this->m_str.c_str(); };
+
+        protected:
+            std::string m_str;
         };
 
         class system {
@@ -466,7 +805,6 @@ public:
             class process {
             public:
                 static inline DWORD get_parent_process_id() {
-#ifdef WIN32
                     auto ppid = DWORD(0);
                     auto pid = GetCurrentProcessId();
                     PROCESSENTRY32 pe32 = {0};
@@ -487,10 +825,9 @@ public:
                         CloseHandle(hSnapshot);
                     }
                     return ppid;
-#endif
                 }
 
-                static inline long start(_tstring exe, _tstring params, _tstring workingDirectory, std::function<void(std::string _stdout)> _stdout) {
+                static inline long start(std::wstring exe, std::wstring params, std::wstring workingDirectory, std::function<void(std::string _stdout)> _stdout) {
                     auto exitCode = long(0L);
                     auto pipeReadHandle = HANDLE(nullptr);
                     auto pipeWriteHandle = HANDLE(nullptr);
@@ -549,19 +886,19 @@ public:
                     return exitCode;
                 }
 
-                static inline long start(_tstring exe, _tstring params, _tstring workingDirectory) {
+                static inline long start(std::wstring exe, std::wstring params, std::wstring workingDirectory) {
                     return start(exe, params, workingDirectory, [](std::string _stdout) {});
                 }
 
-                static inline long start(_tstring exe, _tstring params) {
-                    return start(exe, params, _tstring(), [](std::string _stdout) {});
+                static inline long start(std::wstring exe, std::wstring params) {
+                    return start(exe, params, std::wstring(), [](std::string _stdout) {});
                 }
 
-                static inline long start(_tstring cmd) {
-                    return start(_tstring(), cmd, _tstring(), [](std::string _stdout) {});
+                static inline long start(std::wstring cmd) {
+                    return start(std::wstring(), cmd, std::wstring(), [](std::string _stdout) {});
                 }
 
-                static inline HANDLE shell_execute(_tstring exe, _tstring params, _tstring workingDirectory) {
+                static inline HANDLE shell_execute(std::wstring exe, std::wstring params, std::wstring workingDirectory) {
                     auto handle = HANDLE(nullptr);
                     SHELLEXECUTEINFO se = {0};
                     se.cbSize = sizeof(SHELLEXECUTEINFO);
@@ -579,12 +916,12 @@ public:
                     return handle;
                 }
 
-                static inline HANDLE shell_execute(_tstring exe, _tstring params) {
-                    return shell_execute(exe, params, _tstring());
+                static inline HANDLE shell_execute(std::wstring exe, std::wstring params) {
+                    return shell_execute(exe, params, std::wstring());
                 }
 
-                static inline HANDLE shell_execute(_tstring exe) {
-                    return shell_execute(exe, _tstring(), _tstring());
+                static inline HANDLE shell_execute(std::wstring exe) {
+                    return shell_execute(exe, std::wstring(), std::wstring());
                 }
 
                 static inline void wait(HANDLE handle, DWORD timeout = INFINITE) {
@@ -604,9 +941,9 @@ public:
 
             class io {
             public:
-                class path : public _base_string_t {
+                class path : public _base_wstring {
                 public:
-                    static inline bool exists(_tstring path) {
+                    static inline bool exists(std::wstring path) {
                         auto b = false;
                         if (!path.empty() && path[path.size() - 1] == PATH_SEPARATOR &&
                             (!(path.size() >= 2 && path[path.size() - 2] == PATH_SEPARATOR))) {
@@ -619,23 +956,27 @@ public:
                         return b;
                     }
 
-                    static inline bool is_file(_tstring path) {
+                    static inline bool is_file(std::wstring path) {
                         return exists(path) && !std::filesystem::is_directory(path);
                     }
 
-                    static inline bool is_directory(_tstring path) {
+                    static inline bool _is_directory(std::wstring path) {
                         return exists(path) && std::filesystem::is_directory(path);
                     }
 
-                    static inline _tstring name_t(_tstring path) {
-                        auto s = replace_t(path, _T("/"), PATH_SEPARATOR);
+                    static inline uintmax_t _remove_directory(std::wstring path, bool recursive) {
+                        return recursive ? std::filesystem::remove_all(path) : (std::filesystem::remove(path) ? 1 : 0);
+                    }
+
+                    static inline std::wstring _name(std::wstring path) {
+                        auto s = _replace(path, _T("/"), PATH_SEPARATOR);
                         auto pos = s.find_last_of(PATH_SEPARATOR);
                         return (pos == std::string::npos ? s : s.substr(pos + 1));
                     }
 
-                    static inline _tstring combine_t(_tstring path1, _tstring path2) {
-                        _tstring s1 = replace_t(path1, _T("/"), PATH_SEPARATOR);
-                        _tstring s2 = replace_t(path2, _T("/"), PATH_SEPARATOR);
+                    static inline std::wstring combine_t(std::wstring path1, std::wstring path2) {
+                        std::wstring s1 = _replace(path1, _T("/"), PATH_SEPARATOR);
+                        std::wstring s2 = _replace(path2, _T("/"), PATH_SEPARATOR);
                         if (!s1.empty() && s1.at(s1.size() - 1) != PATH_SEPARATOR) {
                             if (s2.empty() || s2.at(0) != PATH_SEPARATOR) {
                                 s1 += PATH_SEPARATOR;
@@ -645,10 +986,10 @@ public:
                         return s1;
                     }
 
-                    static inline _tstring directory(_tstring path) {
-                        _tstring directoryName_ = path;
+                    static inline std::wstring _directory(std::wstring path) {
+                        std::wstring directoryName_ = path;
                         auto pos = path.find_last_of(PATH_SEPARATOR);
-                        if (pos == _tstring::npos) {
+                        if (pos == std::wstring::npos) {
                             directoryName_ = _T(".");
                         } else {
                             directoryName_ = directoryName_.substr(0, pos);
@@ -656,61 +997,80 @@ public:
                         return directoryName_;
                     }
 
-                    static inline string_t executable_file_directory() {
+                    static inline std::wstring executable_file_directory() {
                         TCHAR buffer[MAX_PATH] = {0};
                         GetModuleFileName(nullptr, buffer, _countof(buffer) - 1);
-                        auto exe = string_t(buffer);
+                        auto exe = std::wstring(buffer);
                         auto pos = exe.find_last_of(PATH_SEPARATOR);
-                        if (pos != string_t::npos) {
+                        if (pos != std::wstring::npos) {
                             exe = exe.substr(0, pos);
                         }
                         return exe;
                     }
 
-                    static inline _tstring working_directory() {
-#ifdef WIN32
+                    static inline std::wstring working_directory() {
                         auto workingDirectory = new TCHAR[MAX_PATH];
                         GetCurrentDirectory(MAX_PATH, workingDirectory);
-#endif
                         return workingDirectory;
                     }
 
-                    static inline _tstring name_without_extension_t(_tstring path) {
-                        _tstring s = path;
+                    static inline std::wstring _extension(std::wstring path) {
+                        std::wstring s = path;
                         auto pos = path.find_last_of(PATH_SEPARATOR);
-                        if (pos != _tstring::npos) {
+                        if (pos != std::wstring::npos) {
                             s = s.substr(pos + 1);
                         }
                         pos = s.find_last_of(_T("."));
-                        if (pos != _tstring::npos) {
+                        if (pos != std::wstring::npos) {
+                            s = s.substr(pos);
+                        }
+                        return s;
+                    }
+
+                    static inline std::wstring _name_without_extension(std::wstring path) {
+                        std::wstring s = path;
+                        auto pos = path.find_last_of(PATH_SEPARATOR);
+                        if (pos != std::wstring::npos) {
+                            s = s.substr(pos + 1);
+                        }
+                        pos = s.find_last_of(_T("."));
+                        if (pos != std::wstring::npos) {
                             s = s.substr(0, pos);
                         }
                         return s;
                     }
 
                 public:
-                    path(_tstring path) : _base_string_t(path) { }
+                    path(std::wstring path) : _base_wstring(path) { }
 
-                    _tstring combine(_tstring path) {
+                    std::wstring combine(std::wstring path) {
                         return utils::system::io::path::combine_t(this->m_str, path);
                     }
 
-                    _tstring name() {
-                        return utils::system::io::path::name_t(this->m_str);
+                    std::wstring name() {
+                        return utils::system::io::path::_name(this->m_str);
                     }
 
-                    _tstring name_without_extension() {
-                        return utils::system::io::path::name_without_extension_t(this->m_str);
+                    std::wstring extension() {
+                        return utils::system::io::path::_extension(this->m_str);
+                    }
+
+                    std::wstring name_without_extension() {
+                        return utils::system::io::path::_name_without_extension(this->m_str);
+                    }
+
+                    std::wstring directory() {
+                        return utils::system::io::path::_directory(this->m_str);
                     }
                 };
 
-                class file : public _base_string_t {
+                class file : public _base_wstring {
                 public:
-                    file(_tstring path) : _base_string_t(path) { }
+                    file(std::wstring path) : _base_wstring(path) { }
 
                     bool exists() {
                         auto b = false;
-                        auto path = _tstring(this->m_str);
+                        auto path = std::wstring(this->m_str);
                         if (!path.empty() && path[path.size() - 1] == PATH_SEPARATOR &&
                             (!(path.size() >= 2 && path[path.size() - 2] == PATH_SEPARATOR))) {
                             path = path.substr(0, path.size() - 1);
@@ -734,54 +1094,74 @@ public:
                         return b;
                     }
 
-                    bool move(_tstring newPath) {
+                    bool move(std::wstring newPath) {
                         auto b = true;
-                        auto _new = _tstring(newPath);
+                        auto dst = std::wstring(newPath);
                         try {
-                            if (std::filesystem::exists(_new) && std::filesystem::is_directory(_new)) {
-                                _new = utils::system::io::path::combine_t(newPath, utils::system::io::path::name_t(this->m_str));
+                            if (std::filesystem::exists(dst) && std::filesystem::is_directory(dst)) {
+                                dst = utils::system::io::path::combine_t(newPath, utils::system::io::path::_name(this->m_str));
                             }
-                            if (std::filesystem::exists(_new)) {
-                                if (std::filesystem::is_directory(_new)) {
+                            if (std::filesystem::exists(dst)) {
+                                if (std::filesystem::is_directory(dst)) {
                                     b = false;
                                 } else {
-                                    b = std::filesystem::remove(_new);
+                                    b = std::filesystem::remove(dst);
                                 }
                             }
                         } catch (...) {
                             b = false;
                         }
                         if (b) {
-                            b = ::rename(t2s(this->m_str).c_str(), t2s(_new).c_str()) == 0;
+                            b = ::rename(t2s(this->m_str).c_str(), t2s(dst).c_str()) == 0;
                             if (b) {
-                                this->m_str = _new;
+                                this->m_str = dst;
                             }
                         }
                         return b;
                     }
 
-                    bool rename(_tstring newPath) {
+                    bool rename(std::wstring newPath) {
                         return this->move(newPath);
                     }
 
                     inline unsigned long long size() {
                         return this->exists() ? std::filesystem::file_size(this->m_str) : -1;
                     }
+
+                    inline std::string content() {
+                        auto s = std::string();
+                        if (this->exists()) {
+                            FILE* file = nullptr;
+                            _wfopen_s(&file, this->m_str.c_str(), L"rb+");
+                            if (file) {
+                                fseek(file, 0, SEEK_END);
+                                auto size = ftell(file);
+                                if (size > 0) {
+                                    fseek(file, 0, SEEK_SET);
+                                    auto p = std::shared_ptr<char>( new char[size]);
+                                    fread(p.get(), size, sizeof(p.get()[0]), file);
+                                    s.append(p.get(), size);
+                                }
+                                fclose(file);
+                            }
+                        }
+                        return s;
+                    }
                 };
 
                 class ofstream : public file {
                 public:
-                    static inline void writeBytes(_tstring file, const char *data, size_t size, bool createNew = true) {
+                    static inline void writeBytes(std::wstring file, const char *data, size_t size, bool createNew = true) {
                         auto f = ofstream(file, createNew);
                         f.write(data, size);
                         f.close();
                     }
 
-                    static inline void appendBytes(_tstring file, const char *data, size_t size) {
+                    static inline void appendBytes(std::wstring file, const char *data, size_t size) {
                         ofstream::writeBytes(file, data, size, false);
                     }
 
-                    ofstream(_tstring path, bool createNew = false) : file(path), m_closed(false) {
+                    ofstream(std::wstring path, bool createNew = false) : file(path), m_closed(false) {
                         if (createNew) {
                             this->remove();
                         }
@@ -799,6 +1179,10 @@ public:
                         this->m_file.write(data, size);
                     }
 
+                    inline void write(const std::string& data) {
+                        this->write(data.c_str(), data.size());
+                    }
+
                     inline void close() {
                         if (!m_closed) {
                             this->m_closed = true;
@@ -814,32 +1198,26 @@ public:
 
                 class image : public file {
                 public:
-#ifdef WIN32
-                    bool png(const _tstring dst = _tstring()) {
-                        auto path = _tstring(dst);
+                    image(std::wstring file) : file(file)  {}
+                    bool png(const std::wstring dst = std::wstring()) {
+                        auto path = std::wstring(dst);
                         if (path.empty()) {
-                            auto png = utils::format(_T("%s.png"), utils::system::io::path::name_without_extension_t(this->m_str));
-                            path = utils::system::io::path::combine_t(utils::system::io::path::directory(this->m_str), png.c_str());
+                            auto png = utils::format(_T("%s.png"), utils::system::io::path::_name_without_extension(this->m_str));
+                            path = utils::system::io::path::combine_t(utils::system::io::path::_directory(this->m_str), png.c_str());
                         }
                         CImage image;
                         image.Load(this->m_str.c_str());
                         return image.Save(path.c_str(), Gdiplus::ImageFormatPNG) == S_OK;
                     }
-
-#endif
                 };
 
-                class directory : public _base_string_t {
+                class directory : public _base_wstring {
                 public :
-                    static inline std::vector<_tstring> enumerate_t(_tstring path, bool recursive = true) {
-                        std::vector<_tstring> directories;
-                        if (path::is_directory(path)) {
+                    static inline std::vector<std::wstring> enumerate_t(std::wstring path, bool recursive = true) {
+                        std::vector<std::wstring> directories;
+                        if (path::_is_directory(path)) {
                             for (const auto &entry: std::filesystem::directory_iterator(path)) {
-#ifdef UNICODE
-                                _tstring p = reinterpret_cast<LPCTSTR>(entry.path().u16string().c_str());
-#else
-                                _tstring p = reinterpret_cast<LPCTSTR>(entry.path().string().c_str());
-#endif
+                                std::wstring p = reinterpret_cast<LPCTSTR>(entry.path().u16string().c_str());
                                 if (entry.is_directory()) {
                                     if (recursive) {
                                         for (auto &directory: enumerate_t(p, recursive)) {
@@ -853,55 +1231,43 @@ public:
                         return directories;
                     }
 
-                    directory(_tstring path) : _base_string_t(path) {}
+                    directory(std::wstring path) : _base_wstring(path) {}
 
-                    inline _tstring Create() {
+                    inline std::wstring mkdir() {
                         if (!this->m_str.empty()) {
-                            _tstring::size_type tmp_pos_begin = 0;
-                            _tstring::size_type tmp_pos;
-#ifdef WIN32
+                            std::wstring::size_type tmp_pos_begin = 0;
+                            std::wstring::size_type tmp_pos;
                             if (this->m_str.find(UNC) == 0) {
                                 tmp_pos = this->m_str.find(PATH_SEPARATOR, _tcslen(UNC));
                             } else {
                                 tmp_pos = this->m_str.find(PATH_SEPARATOR, tmp_pos_begin);
                             }
-#else
-                            tmp_pos = this->m_path.find(PATH_SEPARATOR_W, tmp_pos_begin);
-#endif
-                            while (tmp_pos != _tstring::npos) {
+                            while (tmp_pos != std::wstring::npos) {
                                 auto tmpdir = this->m_str.substr(0, tmp_pos);
                                 if (tmpdir.empty()) {
                                     return this->m_str;
                                 }
                                 if (!std::filesystem::exists(tmpdir)) {
-#ifdef WIN32
                                     ::CreateDirectory(tmpdir.c_str(), nullptr);
-#else
-                                    ::mkdir(tmpdir.c_str(), S_IRWXU | S_IRWXG | S_IRWXO);
-#endif
                                 }
                                 tmp_pos_begin = tmp_pos + 1;
                                 tmp_pos = this->m_str.find(PATH_SEPARATOR, tmp_pos_begin);
                             }
                             if (!std::filesystem::exists(this->m_str)) {
-#ifdef WIN32
                                 ::CreateDirectory(this->m_str.c_str(), nullptr);
-#else
-                                ::mkdir(this->m_path.c_str(), S_IRWXU | S_IRWXG | S_IRWXO);
-#endif
                             }
                         }
                         return this->m_str;
                     }
 
-                    bool move(_tstring newPath) {
+                    bool move(std::wstring newPath) {
                         auto b = ::rename(t2s(this->m_str).c_str(), t2s(newPath).c_str()) == 0;
                         this->m_str = newPath;
                         return b;
                     }
 
-                    _tstring name() {
-                        _tstring name = utils::replace_t(this->m_str, _T("/"), PATH_SEPARATOR);
+                    std::wstring name() {
+                        std::wstring name = utils::_replace(this->m_str, _T("/"), PATH_SEPARATOR);
                         auto pos = name.find_last_of(PATH_SEPARATOR);
                         if (pos != std::wstring::npos) {
                             name = name.substr(pos + 1);
@@ -909,18 +1275,167 @@ public:
                         return name;
                     }
 
-                    bool rename(_tstring newPath) {
+                    bool rename(std::wstring newPath) {
                         return this->move(newPath);
                     }
 
-                    std::vector<_tstring> enumerate(bool recursive = true) {
+                    std::vector<std::wstring> enumerate(bool recursive = true) {
                         return enumerate_t(this->m_str, recursive);
                     }
 
                     bool exists() {
-                        return utils::system::io::path::is_directory(this->m_str);
+                        return utils::system::io::path::_is_directory(this->m_str);
+                    }
+
+                    uintmax_t remove(bool recursive = true) {
+                        return utils::system::io::path::_remove_directory(this->m_str, true);
                     }
                 };
+            };
+
+            class threading {
+            public:
+                static constexpr auto mutex = _T("utils::threading");
+                static inline std::recursive_mutex* find_recursive_mutex(std::wstring recursive_mutex_name) {
+                    std::lock_guard<std::recursive_mutex> recursive_mutex(_utils_init_.mutex_singleton);
+                    std::recursive_mutex* p = nullptr;
+                    if (_utils_init_.mutexes.contains(recursive_mutex_name)) {
+                        p = _utils_init_.mutexes[recursive_mutex_name];
+                    } else {
+                        p = new std::recursive_mutex();
+                        _utils_init_.mutexes[recursive_mutex_name] = p;
+                    }
+                    return p;
+                }
+
+                static inline std::recursive_mutex* find_recursive_mutex(std::string recursive_mutex_name) {
+                    return find_recursive_mutex(utils::s2w(recursive_mutex_name));
+                }
+            };
+
+            class log {
+            public:
+                static constexpr auto mutex = _T("utils::log");
+
+                static inline void write(std::wstring log) {
+                    synchronsize(mutex);
+
+                    TCHAR buffer[MAX_PATH] = { 0 };
+                    GetModuleFileName(nullptr, buffer, _countof(buffer) - 1);
+                    auto logFilePath = std::wstring(buffer);
+                    auto pos = logFilePath.find_last_of('.');
+                    if (pos != std::wstring::npos) {
+                        logFilePath = logFilePath.substr(0, pos);
+                    }
+                    logFilePath += _T(".log");
+                    FILE* file = nullptr;
+                    _tfopen_s(&file, logFilePath.c_str(), _T("ab+"));
+                    if (file) {
+                        fseek(file, 0, SEEK_END);
+                        std::string text;
+                        text = utils::t2s(log);
+                        fwrite(text.c_str(), sizeof(text.c_str()[0]), text.size(), file);
+                        fclose(file);
+                        file = nullptr;
+                    }
+                }
+            };
+
+            class console {
+            public:
+                static constexpr auto mutex = _T("utils::system::console");
+                struct text {
+                    std::string s;
+                    WORD color;
+                    text() {
+                        this->color = FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_RED;
+                    }
+
+                    text(std::string s) {
+                        this->s = s;
+                        this->color = FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_RED;
+                    }
+
+                    text(std::string s, WORD color) {
+                        this->s = s;
+                        this->color = color;
+                    }
+                };
+
+                static inline void println(std::vector<text> words, bool break_line) {
+                    synchronsize(utils::system::console::mutex);
+                    static HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+                    if (hConsole != INVALID_HANDLE_VALUE) {
+                        SetConsoleTextAttribute(hConsole, FOREGROUND_BLUE | FOREGROUND_GREEN | FOREGROUND_RED);
+
+                        std::wstring line;
+                        auto datetime = utils::format(_T("[%s] "), utils::datetime::now().c_str());
+                        _tprintf(_T("%s"), datetime.c_str());
+                        line += datetime;
+                        for (auto& w : words) {
+                            SetConsoleTextAttribute(hConsole, w.color);
+                            printf("%s", w.s.c_str());
+                            line += utils::s2w(w.s);
+                        }
+                        if (break_line) {
+                            _tprintf(_T("\n"));
+                            line += _T("\n");
+                        }
+                        log::write(line);
+                    }
+                }
+
+                static inline void println(std::vector<text> words) {
+                    println(words, true);
+                }
+
+                static inline void println(std::string s) {
+                    std::vector<text> v;
+                    v.push_back(text(s));
+                    println(v, true);
+                }
+
+                static inline void println(std::string s, WORD color) {
+                    std::vector<text> v;
+                    v.push_back(text(s, color));
+                    println(v, true);
+                }
+
+                static inline void println_red(std::string s) {
+                    std::vector<text> v;
+                    v.push_back(text(s, FOREGROUND_RED | FOREGROUND_INTENSITY));
+                    println(v, true);
+                }
+
+                static inline void println_green(std::string s) {
+                    std::vector<text> v;
+                    v.push_back(text(s, FOREGROUND_GREEN | FOREGROUND_INTENSITY));
+                    println(v, true);
+                }
+
+                static inline void println_gray(std::string s) {
+                    std::vector<text> v;
+                    v.push_back(text(s, FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE));
+                    println(v, true);
+                }
+
+                static inline void print(std::string s, WORD color) {
+                    std::vector<text> v;
+                    v.push_back(text(s, color));
+                    println(v, false);
+                }
+
+                static inline void print_red(std::string s) {
+                    print(s, FOREGROUND_RED | FOREGROUND_INTENSITY);
+                }
+
+                static inline void print_green(std::string s) {
+                    print(s, FOREGROUND_GREEN | FOREGROUND_INTENSITY);
+                }
+
+                static inline void print_blue(std::string s) {
+                    print(s, FOREGROUND_BLUE | FOREGROUND_INTENSITY);
+                }
             };
         };
 
@@ -934,18 +1449,89 @@ public:
 
             class status {
             public:
-                static const int Ok = 200;
-                static const int PermanentlyMoved = 301;
-                static const int TemporarilyMoved = 302;
-                static const int Unauthorized = 401;
-                static const int NotFound = 404;
-                static const int InternalServerError = 500;
+                static constexpr auto Ok = 200;
+                static constexpr auto PermanentlyMoved = 301;
+                static constexpr auto TemporarilyMoved = 302;
+                static constexpr auto Unauthorized = 401;
+                static constexpr auto NotFound = 404;
+                static constexpr auto InternalServerError = 500;
+            };
+
+            class method {
+            public:
+                static constexpr auto GET = "GET";
+                static constexpr auto POST = "POST";
+                static constexpr auto HEAD = "HEAD";
+            };
+
+            class schema {
+            public:
+                static constexpr auto HTTP = "http://";
+                static constexpr auto HTTPS = "https://";
+            };
+
+            class mime {
+            public:
+                static inline std::string find(std::wstring file) {  
+                    auto name = std::string("application/octet-stream");
+                    auto extension = utils::_lower(utils::system::io::path::_extension(file));
+                    for (auto& e : _utils_init_.mime_types) {
+                        if (extension == e.extension) {
+                            name = e.name;
+                            break;
+                        }
+                    }
+                    return name;
+                }
+            };
+
+            struct Proxy {
+                Proxy() : port(0) {}
+
+                Proxy(std::string uri) : port(0) {
+                    this->parse(uri);
+                }
+
+                Proxy(std::string host, int port) {
+                    this->host = host;
+                    this->port = port;
+                }
+
+                void parse(std::string uri) {
+                    auto host = std::string();
+                    auto port = 0;
+                    auto pos = uri.find(":");
+                    if (pos != std::string::npos) {
+                        host = uri.substr(0, pos);
+                        port = utils::_atoi(uri.substr(pos + 1));
+                    }
+                    if (!host.empty()) {
+                        auto lower = utils::_lower(host);
+                        if (lower.starts_with(utils::http::schema::HTTP)) {
+                            host = host.substr(strlen(utils::http::schema::HTTP));
+                        }
+                        if (lower.starts_with(utils::http::schema::HTTPS)) {
+                            host = host.substr(strlen(utils::http::schema::HTTPS));
+                        }
+                    }
+                    this->host = host;
+                    this->port = port;
+                }
+
+                bool check() {
+                    return !this->host.empty() && this->port > 0 && this->port <= 65535;
+                }
+
+                std::string host;
+                int port;
+                std::string userName;
+                std::string password;
             };
 
             struct CURLDATA {
             public:
                 std::string uri;
-                _tstring fileName;
+                std::wstring fileName;
                 std::vector<std::string> headers;
                 std::string body;
                 utils::system::io::ofstream *ofstream;
@@ -1000,13 +1586,13 @@ public:
                             }
                         }
                         if (params->fileName.empty()) {
-                            params->fileName = _tstring(t2t(params->uri));
+                            params->fileName = std::wstring(t2t(params->uri));
                             auto pos = params->fileName.find_last_of(_T('?'));
-                            if (pos != _tstring::npos) {
+                            if (pos != std::wstring::npos) {
                                 params->fileName = params->fileName.substr(0, pos);
                             }
                             pos = params->fileName.find_last_of(_T('/'));
-                            if (pos != _tstring::npos) {
+                            if (pos != std::wstring::npos) {
                                 params->fileName = params->fileName.substr(pos + 1);
                             }
                         }
@@ -1044,25 +1630,25 @@ public:
                     this->m_cookie.clear();
                 }
 
-                inline void setUri(std::string uri) {
+                inline void set_uri(std::string uri) {
                     this->m_uri = uri;
                 }
 
-                inline void setUri(std::wstring uri) {
+                inline void set_uri(std::wstring uri) {
                     this->m_uri = w2s(uri);
                 }
 
-                inline void setCookie(std::string cookie) {
+                inline void set_cookie(std::string cookie) {
                     this->m_cookie = cookie;
                 }
 
-                inline void setProxy(std::string proxyHost, std::string proxyUserName = std::string(), std::string proxyPassword = std::string()) {
+                inline void set_proxy(std::string proxyHost, std::string proxyUserName = std::string(), std::string proxyPassword = std::string()) {
                     this->m_proxyHost = proxyHost;
                     this->m_proxyUserName = proxyUserName;
                     this->m_proxyPassword = proxyPassword;
                 }
 
-                inline std::string Get() {
+                inline std::string get() {
                     CURLDATA params(this->m_uri);
                     auto curl = curl_easy_init();
                     if (curl) {
@@ -1079,7 +1665,7 @@ public:
                     return params.body;
                 }
 
-                inline std::vector<std::string> Query() {
+                inline std::vector<std::string> query() {
                     CURLDATA params(this->m_uri);
                     auto curl = curl_easy_init();
                     if (curl) {
@@ -1099,7 +1685,7 @@ public:
                     return params.headers;
                 }
 
-                inline _tstring Download(std::function<bool(CURLDATA *)> f) {
+                inline std::wstring download(std::function<bool(CURLDATA *)> f) {
                     CURLDATA params(this->m_uri);
                     params.f = f;
                     auto curl = curl_easy_init();
@@ -1123,8 +1709,8 @@ public:
                     return params.fileName;
                 }
 
-                inline _tstring Download() {
-                    return this->Download([](CURLDATA *) { return true; });
+                inline std::wstring download() {
+                    return this->download([](CURLDATA *) { return true; });
                 }
 
             private:
@@ -1163,24 +1749,20 @@ public:
                         ::httplib::Headers m_headers;
                     } headers;
 
-                    _tstring contentType;
+                    std::wstring contentType;
                 };
 
                 static inline int timeout() { return m_timeout; }
 
                 static inline void setTimeout(int timeout) { m_timeout = timeout; }
 
-#ifdef WIN32
-
                 static inline void create_new_certificate(bool overwrite = true) {
                     utils::system::io::ofstream::writeBytes(utils::system::io::path::combine_t(utils::system::io::path::executable_file_directory(), LOCALHOST_CRT_FILE_NAME), CERTIFICATE, strlen(CERTIFICATE), overwrite);
                     utils::system::io::ofstream::writeBytes(utils::system::io::path::combine_t(utils::system::io::path::executable_file_directory(), LOCALHOST_KEY_FILE_NAME), PRIVATE_KEY, strlen(PRIVATE_KEY), overwrite);
                 }
 
-#endif
-
-                static inline void create_static_file_server(_tstring directory, _tstring cert_path, _tstring private_key_path,
-                                                             _tstring host, int port, _tstring basicUserName, _tstring basicPassword,
+                static inline void create_static_file_server(std::wstring directory, std::wstring cert_path, std::wstring private_key_path,
+                                                             std::wstring host, int port, std::wstring basicUserName, std::wstring basicPassword,
                                                              std::function<void(const ::httplib::Request &, ::httplib::Response &)> Get,
                                                              std::function<void(const ::httplib::Request &, ::httplib::Response &)> Post) {
                     auto cert = cert_path;
@@ -1194,23 +1776,23 @@ public:
                     sslServer.Get(".*", Get);
                     sslServer.Post(".*", Post);
                     sslServer.set_basic_auth(utils::t2s(basicUserName), utils::t2s(basicPassword));
-                    sslServer.set_mount_point("/", utils::replace_t(utils::t2s(directory), PATH_SEPARATORA, '/'));
+                    sslServer.set_mount_point("/", utils::w2s(utils::_replace(directory, PATH_SEPARATORA, L'/')));
                     sslServer.listen(utils::t2s(host).c_str(), port);
                 }
 
-                static inline void create_static_file_server(_tstring directory,
+                static inline void create_static_file_server(std::wstring directory,
                                                              std::function<void(const ::httplib::Request &, ::httplib::Response &)> Get,
                                                              std::function<void(const ::httplib::Request &, ::httplib::Response &)> Post) {
-                    create_static_file_server(directory, _tstring(), _tstring(), HOST_ANY, SSL_PORT, _tstring(), _tstring(), Get, Post);
+                    create_static_file_server(directory, std::wstring(), std::wstring(), HOST_ANY, SSL_PORT, std::wstring(), std::wstring(), Get, Post);
                 }
 
-                static inline void create_static_file_server(_tstring directory,
+                static inline void create_static_file_server(std::wstring directory,
                                                              std::function<void(const ::httplib::Request &, ::httplib::Response &)> Post) {
-                    create_static_file_server(directory, _tstring(), _tstring(), HOST_ANY, SSL_PORT, _tstring(), _tstring(), [](const ::httplib::Request &, ::httplib::Response &) {}, Post);
+                    create_static_file_server(directory, std::wstring(), std::wstring(), HOST_ANY, SSL_PORT, std::wstring(), std::wstring(), [](const ::httplib::Request &, ::httplib::Response &) {}, Post);
                 }
 
-                static inline void create_static_file_server(_tstring directory) {
-                    create_static_file_server(directory, _tstring(), _tstring(), HOST_ANY, SSL_PORT, _tstring(), _tstring(),
+                static inline void create_static_file_server(std::wstring directory) {
+                    create_static_file_server(directory, std::wstring(), std::wstring(), HOST_ANY, SSL_PORT, std::wstring(), std::wstring(),
                                               [](const ::httplib::Request &, ::httplib::Response &) {},
                                               [](const ::httplib::Request &, ::httplib::Response &) {});
                 }
@@ -1228,16 +1810,29 @@ public:
             private:
                 static int m_timeout;
             };
+
+            http():m_uri(std::wstring()) {}
+            http(std::wstring uri) :m_uri(uri) {}
+
+            inline std::wstring trunk() {
+                auto uri = std::wstring(this->m_uri);
+                auto pos = uri.find(_T("?"));
+                if (pos != std::wstring::npos) {
+                    uri = uri.substr(0, pos);
+                }
+                return uri;
+            }
+
+            protected:
+                std::wstring m_uri;
         };
 
         class datetime {
         public:
-#ifdef WIN32
-
-            static inline _tstring now() {
+            static inline std::wstring now(std::wstring format) {
                 SYSTEMTIME systemTime = {0};
                 GetLocalTime(&systemTime);
-                return utils::format(_T("%04d/%02d/%02d %02d:%02d:%02d.%03d"),
+                return utils::format(format.c_str(),
                                      systemTime.wYear,
                                      systemTime.wMonth,
                                      systemTime.wDay,
@@ -1247,7 +1842,9 @@ public:
                                      systemTime.wMilliseconds);
             }
 
-#endif
+            static inline std::wstring now() {
+                return utils::datetime::now(L"%04d/%02d/%02d %02d:%02d:%02d.%03d");
+            }
         };
 
         _wstring() : std::wstring() {}
@@ -1256,8 +1853,6 @@ public:
             this->clear();
             this->append(utils::format(L"%d", i));
         }
-
-#ifdef WIN32
 
         _wstring(DWORD dw) : std::wstring() {
             this->clear();
@@ -1268,8 +1863,6 @@ public:
             this->clear();
             this->append(utils::format(L"0x%llx", h));
         }
-
-#endif
 
         _wstring(const wchar_t *s) : std::wstring(s) {}
 
@@ -1297,22 +1890,20 @@ public:
             return std::shared_ptr<utils::system::io::path>(new utils::system::io::path(*this));
         }
 
+        inline std::shared_ptr<utils::http> to_http() {
+            return std::shared_ptr<utils::http>(new utils::http(*this));
+        }
+
         inline void println(std::wstring prefix, std::wstring suffix) {
-#ifdef WIN32
             wprintf(L"[%s] %s%s%s\n", utils::datetime::now().c_str(), prefix.c_str(), this->c_str(), suffix.c_str());
-#endif
         }
 
         inline void println(std::wstring prefix) {
-#ifdef WIN32
-            this->println(prefix, _tstring());
-#endif
+            this->println(prefix, std::wstring());
         }
 
         inline void println() {
-#ifdef WIN32
-            this->println(_tstring(), _tstring());
-#endif
+            this->println(std::wstring(), std::wstring());
         }
 
         inline wchar_t *allocate_new() {
@@ -1370,7 +1961,7 @@ public:
             return size >= this->size() ? std::wstring() : this->substr(0, size);
         }
 
-        inline std::shared_ptr<utils::system::io::file> file() {
+        inline std::shared_ptr<utils::system::io::file> to_file() {
             return std::shared_ptr<utils::system::io::file>(new utils::system::io::file(*this));
         }
 
@@ -1394,72 +1985,26 @@ public:
             return s;
         }
 
-        inline std::wstring replace(std::wstring s, const std::wstring target, const std::wstring replacement, bool once) {
-            if (s.empty() || target.empty()) {
-                return s;
-            }
-            using S = std::wstring;
-            using C = std::wstring::value_type;
-            using N = std::wstring::size_type;
-            struct {
-                auto len(const S &s) { return s.size(); }
-
-                auto len(const C *p) { return std::char_traits<C>::length(p); }
-
-                auto len(const C c) { return sizeof(c); }
-
-                auto sub(S *s, const S &t, N pos, N len) { s->replace(pos, len, t); }
-
-                auto sub(S *s, const C *t, N pos, N len) { s->replace(pos, len, t); }
-
-                auto sub(S *s, const C t, N pos, N len) { s->replace(pos, len, 1, t); }
-
-                auto ins(S *s, const S &t, N pos) { s->insert(pos, t); }
-
-                auto ins(S *s, const C *t, N pos) { s->insert(pos, t); }
-
-                auto ins(S *s, const C t, N pos) { s->insert(pos, 1, t); }
-            } util;
-
-            N target_length = util.len(target);
-            N replacement_length = util.len(replacement);
-            if (target_length == 0) {
-                N n = s.size() + replacement_length * (1 + s.size());
-                s.reserve(!once ? n : s.size() + replacement_length);
-                for (N i = 0; i < n; i += 1 + replacement_length) {
-                    util.ins(&s, replacement, i);
-                    if (once) break;
-                }
-                return s;
-            }
-
-            N pos = 0;
-            while ((pos = s.find(target, pos)) != std::wstring::npos) {
-                util.sub(&s, replacement, pos, target_length);
-                if (once) return s;
-                pos += replacement_length;
-            }
-            return s;
+        inline std::wstring replace(const std::wstring find, const std::wstring replacement, bool once) {
+            return _replace(*this, find, replacement, once);
         }
 
-        inline std::wstring replace(const std::wstring target, const std::wstring replacement, bool once) {
-            return replace_t(*this, target, replacement, once);
+        inline std::wstring replace(const std::wstring find, const std::wstring replacement) {
+            return _replace(*this, find, replacement);
         }
 
-        inline std::wstring replace(const std::wstring target, const std::wstring replacement) {
-            return replace_t(*this, target, replacement, false);
+        inline std::wstring replace(const wchar_t find, const wchar_t replacement) {
+            return _replace(*this, find, replacement);
+        }
+
+        inline std::wstring lower() {
+            return utils::_lower(*this);
+        }
+
+        inline std::wstring upper() {
+            return utils::_upper(*this);
         }
     };
 };
 
-class __utils_init__ {
-public:
-    __utils_init__() {
-#ifdef WIN32
-        setbuf(stdout, 0);
-#endif
-    }
-} utilsInit;
-
-int utils::http::httplib::m_timeout = CPPHTTPLIB_READ_TIMEOUT_SECOND;
 #endif
