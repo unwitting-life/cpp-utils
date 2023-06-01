@@ -24,12 +24,9 @@
 
 #include <windows.h>
 
-
-
-#define wstr _utils::_wstring
 #define stringstream_t std::wstringstream
 #define ofstream_t std::wofstream
-#define utils wstr
+#define utils _utils::_wstring
 
 #define UNC_W LR"(\\)"
 #define UNC_A R"(\\)"
@@ -155,7 +152,7 @@
 
 #define synchronsize(x) std::lock_guard<std::recursive_mutex> _recursive_mutex(*utils::system::threading::find_recursive_mutex((x)))
 
-static class __utils_init__ {
+static class __utils_configurations__ {
 public:
     struct mime_entry {
         std::wstring extension;
@@ -172,7 +169,7 @@ public:
         }
     };
 
-    __utils_init__() {
+    __utils_configurations__() {
         setbuf(stdout, 0);
         this->http_timeout = CPPHTTPLIB_READ_TIMEOUT_SECOND;
         this->init_mime_mime_types();
@@ -533,7 +530,14 @@ public:
     std::vector<mime_entry> mime_types;
     std::recursive_mutex mutex_singleton;
     std::unordered_map<std::wstring, std::recursive_mutex*> mutexes;
-} _utils_init_;
+
+    class http {
+        class curl {
+        public:
+            bool progress;
+        } curl;
+    } http;
+} utils_config;
 
 class _utils {
 public:
@@ -778,6 +782,48 @@ public:
             auto upper = std::wstring(s);
             std::transform(upper.begin(), upper.end(), upper.begin(), ::towupper);
             return upper;
+        }
+
+        static inline std::wstring itoa16(int i) {
+            std::wstring s;
+            wchar_t hex[100] = { 0 };
+            _snwprintf_s(hex, _countof(hex) - 1, _countof(hex) - 1, L"%x", i);
+            return hex;
+        }
+
+        static inline std::wstring hex(int i) {
+            return itoa16(i);
+        }
+
+        static inline std::wstring _hash(BYTE* data, size_t data_size, ALG_ID hash_type = CALG_MD5) {
+            std::wstring value;
+            HCRYPTPROV hCryptProv = NULL;
+            HCRYPTHASH hCryptHash = NULL;
+            DWORD dwHashDataLength = 0;
+            DWORD dwTemp = sizeof(dwHashDataLength);
+            if (CryptAcquireContext(&hCryptProv, NULL, NULL, PROV_RSA_AES, CRYPT_VERIFYCONTEXT) &&
+                CryptCreateHash(hCryptProv, hash_type, NULL, NULL, &hCryptHash) &&
+                CryptHashData(hCryptHash, data, static_cast<DWORD>(data_size), 0) &&
+                CryptGetHashParam(hCryptHash, HP_HASHSIZE, (BYTE*)(&dwHashDataLength), &dwTemp, 0)) {
+                auto p = new BYTE[dwHashDataLength + 1];
+                if (p) {
+                    RtlZeroMemory(p, dwHashDataLength + 1);
+                    if (CryptGetHashParam(hCryptHash, HP_HASHVAL, p, &dwHashDataLength, 0)) {
+                        for (DWORD i = 0; i < dwHashDataLength; i++) {
+                            value += utils::_upper(utils::hex(p[i]));
+                        }
+                    }
+                    delete[] p;
+                    p = nullptr;
+                }
+            }
+            if (hCryptHash) {
+                CryptDestroyHash(hCryptHash);
+            }
+            if (hCryptProv) {
+                CryptReleaseContext(hCryptProv, 0);
+            }
+            return value;
         }
 
         class _base_wstring {
@@ -1147,6 +1193,19 @@ public:
                         }
                         return s;
                     }
+
+                    inline std::wstring hash(ALG_ID hash_type) {
+                        auto content = this->content();
+                        return utils::_hash(reinterpret_cast<BYTE*>(const_cast<char*>(content.c_str())), content.size(), hash_type);
+                    }
+
+                    inline std::wstring md5() {
+                        return this->hash(CALG_MD5);
+                    }
+
+                    inline std::wstring sha1() {
+                        return this->hash(CALG_SHA1);
+                    }
                 };
 
                 class ofstream : public file {
@@ -1213,22 +1272,41 @@ public:
 
                 class directory : public _base_wstring {
                 public :
-                    static inline std::vector<std::wstring> enumerate_t(std::wstring path, bool recursive = true) {
+                    static inline std::vector<std::wstring> _enumerate(std::wstring path, bool recursive = true) {
                         std::vector<std::wstring> directories;
                         if (path::_is_directory(path)) {
                             for (const auto &entry: std::filesystem::directory_iterator(path)) {
-                                std::wstring p = reinterpret_cast<LPCTSTR>(entry.path().u16string().c_str());
+                                std::wstring w = reinterpret_cast<LPCTSTR>(entry.path().u16string().c_str());
                                 if (entry.is_directory()) {
                                     if (recursive) {
-                                        for (auto &directory: enumerate_t(p, recursive)) {
+                                        for (auto &directory: _enumerate(w, recursive)) {
                                             directories.push_back(directory);
                                         }
                                     }
-                                    directories.push_back(p);
+                                    directories.push_back(w);
                                 }
                             }
                         }
                         return directories;
+                    }
+
+                    static inline std::vector<std::wstring> _files(std::wstring path, bool recursive = true) {
+                        std::vector<std::wstring> files;
+                        if (path::_is_directory(path)) {
+                            for (const auto& entry : std::filesystem::directory_iterator(path)) {
+                                std::wstring w = reinterpret_cast<LPCTSTR>(entry.path().u16string().c_str());
+                                if (entry.is_directory()) {
+                                    if (recursive) {
+                                        for (auto& file : _files(w, recursive)) {
+                                            files.push_back(file);
+                                        }
+                                    }
+                                } else {
+                                    files.push_back(w);
+                                }
+                            }
+                        }
+                        return files;
                     }
 
                     directory(std::wstring path) : _base_wstring(path) {}
@@ -1280,7 +1358,11 @@ public:
                     }
 
                     std::vector<std::wstring> enumerate(bool recursive = true) {
-                        return enumerate_t(this->m_str, recursive);
+                        return _enumerate(this->m_str, recursive);
+                    }
+
+                    std::vector<std::wstring> files(bool recursive = true) {
+                        return _files(this->m_str, recursive);
                     }
 
                     bool exists() {
@@ -1297,13 +1379,13 @@ public:
             public:
                 static constexpr auto mutex = _T("utils::threading");
                 static inline std::recursive_mutex* find_recursive_mutex(std::wstring recursive_mutex_name) {
-                    std::lock_guard<std::recursive_mutex> recursive_mutex(_utils_init_.mutex_singleton);
+                    std::lock_guard<std::recursive_mutex> recursive_mutex(utils_config.mutex_singleton);
                     std::recursive_mutex* p = nullptr;
-                    if (_utils_init_.mutexes.contains(recursive_mutex_name)) {
-                        p = _utils_init_.mutexes[recursive_mutex_name];
+                    if (utils_config.mutexes.contains(recursive_mutex_name)) {
+                        p = utils_config.mutexes[recursive_mutex_name];
                     } else {
                         p = new std::recursive_mutex();
-                        _utils_init_.mutexes[recursive_mutex_name] = p;
+                        utils_config.mutexes[recursive_mutex_name] = p;
                     }
                     return p;
                 }
@@ -1475,7 +1557,7 @@ public:
                 static inline std::string find(std::wstring file) {  
                     auto name = std::string("application/octet-stream");
                     auto extension = utils::_lower(utils::system::io::path::_extension(file));
-                    for (auto& e : _utils_init_.mime_types) {
+                    for (auto& e : utils_config.mime_types) {
                         if (extension == e.extension) {
                             name = e.name;
                             break;
@@ -1864,8 +1946,7 @@ public:
             this->append(utils::format(L"0x%llx", h));
         }
 
-        _wstring(const wchar_t *s) : std::wstring(s) {}
-
+        _wstring(wchar_t* s) : std::wstring(s) {}
         _wstring(std::wstring s) : std::wstring(s) {}
 
         _wstring(char* s, UINT cp = CP_ACP) {
@@ -1965,11 +2046,11 @@ public:
             return std::shared_ptr<utils::system::io::file>(new utils::system::io::file(*this));
         }
 
-        inline std::shared_ptr<utils::system::io::image> image() {
+        inline std::shared_ptr<utils::system::io::image> to_image() {
             return std::shared_ptr<utils::system::io::image>(new utils::system::io::image(*this));
         }
 
-        inline std::shared_ptr<utils::system::io::ofstream> ofstream() {
+        inline std::shared_ptr<utils::system::io::ofstream> to_ofstream() {
             return std::shared_ptr<utils::system::io::ofstream>(new utils::system::io::ofstream(*this));
         }
 
