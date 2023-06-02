@@ -257,7 +257,11 @@ namespace utils{
                     ofstream::writeBytes(file, data, size, false);
                 }
 
-                ofstream(std::wstring path, bool truncate = false) : file(path) {
+                ofstream(std::wstring path) : file(path) {
+                    this->m_truncate = false;
+                }
+
+                ofstream(std::wstring path, bool truncate) : file(path) {
                     this->m_truncate = truncate;
                 }
 

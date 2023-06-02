@@ -142,7 +142,7 @@
                     "qSov5MqodQK1DhdgI10IfiuX\n"                                           \
                     "-----END PRIVATE KEY-----\n"
 #define CPPHTTPLIB_OPENSSL_SUPPORT
-#include "cpp-httplib/v0.11.4+/httplib.h"
+#include "cpp-httplib/v0.12.5+/httplib.h"
 #pragma comment(lib, __FILE__ "/../OpenSSL/3.0.6+/VC-WIN64A/lib/libcrypto.lib")
 #pragma comment(lib, __FILE__ "/../OpenSSL/3.0.6+/VC-WIN64A/lib/libssl.lib")
 #pragma comment(lib, __FILE__ "/../curl/builds/libcurl-vc-x64-release-dll-ipv6-sspi-schannel/lib/libcurl.lib")
@@ -399,15 +399,15 @@ namespace utils {
         return upper;
     }
 
-    inline std::wstring itoa16(int i) {
+    inline std::wstring _itoa16(int i, bool padding = false) {
         std::wstring s;
         wchar_t hex[100] = { 0 };
-        _snwprintf_s(hex, _countof(hex) - 1, _countof(hex) - 1, L"%x", i);
+        _snwprintf_s(hex, _countof(hex) - 1, _countof(hex) - 1, _format(L"%%0%dx", padding ? 2 : 0).c_str(), i);
         return hex;
     }
 
-    inline std::wstring hex(int i) {
-        return itoa16(i);
+    inline std::wstring hex(int i, bool padding = false) {
+        return _itoa16(i, padding);
     }
 
     inline std::wstring _hash(BYTE* data, size_t data_size, ALG_ID hash_type = CALG_MD5) {
@@ -425,7 +425,7 @@ namespace utils {
                 RtlZeroMemory(p, dwHashDataLength + 1);
                 if (CryptGetHashParam(hCryptHash, HP_HASHVAL, p, &dwHashDataLength, 0)) {
                     for (DWORD i = 0; i < dwHashDataLength; i++) {
-                        value += utils::_upper(utils::hex(p[i]));
+                        value += utils::_upper(utils::hex(p[i], true));
                     }
                 }
                 delete[] p;

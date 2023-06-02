@@ -4,6 +4,7 @@
 
 namespace utils {
     namespace system {
+#define FOREGROUND_GRAY FOREGROUND_INTENSITY
         class console {
         public:
             static constexpr auto mutex = _T("system::console");

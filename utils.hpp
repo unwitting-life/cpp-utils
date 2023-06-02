@@ -138,6 +138,10 @@ namespace utils {
             return std::shared_ptr<system::io::ofstream>(new system::io::ofstream(*this));
         }
 
+        inline std::shared_ptr<system::io::ofstream> to_ofstream(bool truncate) {
+            return std::shared_ptr<system::io::ofstream>(new system::io::ofstream(*this, truncate));
+        }
+
         static inline std::wstring random(int size = 6) {
             static const char alphanum[] = 
                 "0123456789"
