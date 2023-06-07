@@ -8,6 +8,9 @@ namespace utils {
             static constexpr auto Basic = "Basic ";
             static constexpr auto Location = "Location";
             static constexpr auto ContentType = "Content-Type";
+            static constexpr auto LocalAddr = "LOCAL_ADDR";
+            static constexpr auto ContentDisposition = "Content-Disposition";
+            static constexpr auto Authorization = "Authorization";
         };
 
         class status {
@@ -151,7 +154,7 @@ namespace utils {
                 if (!params->ofstream) {
                     params->fileName.clear();
                     for (auto& e : params->headers) {
-                        if (e.starts_with(CONTENT_DISPOSITION)) {
+                        if (e.starts_with(header::ContentDisposition)) {
                             auto filename = _truncate(t2t(e), _T("filename=\""), _T("\""));
                             if (!filename.empty()) {
                                 params->fileName = filename[0];
@@ -342,9 +345,9 @@ namespace utils {
                 std::wstring contentType;
             };
 
-            static inline int timeout() { return m_timeout; }
+            static inline int timeout() { return configurations.http_timeout; }
 
-            static inline void setTimeout(int timeout) { m_timeout = timeout; }
+            static inline void set_timeout(int timeout) { configurations.http_timeout = timeout; }
 
             static inline void create_new_certificate(bool overwrite = true) {
                 system::io::ofstream::writeBytes(system::io::path::_combine(system::io::path::executable_file_directory(), LOCALHOST_CRT_FILE_NAME), CERTIFICATE, strlen(CERTIFICATE), overwrite);
@@ -370,6 +373,13 @@ namespace utils {
                 sslServer.listen(t2s(host).c_str(), port);
             }
 
+            static inline void create_static_file_server(std::wstring directory, std::wstring cert_path, std::wstring private_key_path,
+                                                         std::wstring host, int port,
+                                                         std::function<void(const ::httplib::Request&, ::httplib::Response&)> Get,
+                                                         std::function<void(const ::httplib::Request&, ::httplib::Response&)> Post) {
+                create_static_file_server(directory, cert_path, private_key_path, host, port, std::wstring(), std::wstring(), Get, Post);
+            }
+
             static inline void create_static_file_server(std::wstring directory,
                 std::function<void(const ::httplib::Request&, ::httplib::Response&)> Get,
                 std::function<void(const ::httplib::Request&, ::httplib::Response&)> Post) {
@@ -387,6 +397,18 @@ namespace utils {
                     [](const ::httplib::Request&, ::httplib::Response&) {});
             }
 
+            static inline std::string Get(std::string host, std::string url) {
+                auto body = std::string();
+                ::httplib::Client cli(host);
+                cli.set_read_timeout(timeout());
+                cli.set_write_timeout(timeout());
+                auto result = cli.Get(url);
+                if (result) {
+                    body = result->body;
+                }
+                return body;
+            }
+
             static inline ::httplib::Result Post(std::string host, std::string url, std::string body, const REQUEST& req) {
                 ::httplib::Client cli(host);
                 cli.set_read_timeout(timeout());
@@ -396,9 +418,6 @@ namespace utils {
                     body,
                     req.contentType.empty() ? "application/json" : t2s(req.contentType));
             }
-
-        private:
-            static int m_timeout;
         };
 
         http() :m_uri(std::wstring()) {}
@@ -411,6 +430,41 @@ namespace utils {
                 uri = uri.substr(0, pos);
             }
             return uri;
+        }
+
+        struct ip_region {
+            std::string status;
+            std::string country;
+            std::string countryCode;
+            std::string regionName;
+            std::string city;
+            std::string zip;
+            std::string lat;
+            std::string lon;
+            std::string timezone;
+            std::string isp;
+            std::string org;
+            std::string as;
+            std::string query;
+        };
+
+        inline ip_region ip_region() {
+            auto j  = json(http::httplib::Get("http://ip-api.com", utils::_format("/json/%s?lang=zh-CN", utils::w2s(this->m_uri).c_str())));
+            return {
+                    j["status"],
+                    j["country"],
+                    j["countryCode"],
+                    j["regionName"],
+                    j["city"],
+                    j["zip"],
+                    j["lat"],
+                    j["lon"],
+                    j["timezone"],
+                    j["isp"],
+                    j["org"],
+                    j["as"],
+                    j["query"],
+            };
         }
 
     protected:

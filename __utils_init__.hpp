@@ -81,10 +81,6 @@
 #pragma comment(lib, "crypt32.lib" )
 
 #include "base64/base64.hpp"
-
-#define CONTENT_DISPOSITION "Content-Disposition"
-#define AUTHORIZATION "Authorization"
-#define CONTENT_TYPE "Content-Type"
 #define CURL_STATICLIB
 
 #include "curl/include/curl/curl.h"
@@ -443,6 +439,7 @@ namespace utils {
 
     class _base_wstring {
     public:
+        _base_wstring(std::string s) : m_str(s2w(s)) {}
         _base_wstring(std::wstring s) : m_str(s) {}
 
         const LPCWSTR c_str() { return this->m_str.c_str(); };
@@ -454,6 +451,7 @@ namespace utils {
     class _base_string {
     public:
         _base_string(std::string s) : m_str(s) {}
+        _base_string(std::wstring s) : m_str(w2s(s)) {}
 
         const LPCSTR c_str() { return this->m_str.c_str(); };
 

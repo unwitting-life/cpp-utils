@@ -6,6 +6,7 @@
 #include "system/process.hpp"
 #include "system/console.hpp"
 #include "system/io/path.hpp"
+#include "json.hpp"
 #include "http.hpp"
 #include "logger.hpp"
 
@@ -180,5 +181,6 @@ namespace utils {
         inline std::wstring format(std::wstring param1) { return _format(this->c_str(), param1.c_str()); }
         inline std::wstring format(std::wstring param1, std::wstring param2) { return _format(this->c_str(), param1.c_str(), param2.c_str()); }
         inline std::wstring format(std::wstring param1, int param2) { return _format(this->c_str(), param1.c_str(), param2); }
+        inline std::wstring format(std::wstring param1, std::wstring param2, int param3, HANDLE param4) { return _format(this->c_str(), param1.c_str(), param2.c_str(), param4, param4); }
     };
-};
+}

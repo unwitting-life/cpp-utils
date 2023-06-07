@@ -5715,7 +5715,7 @@ inline bool Server::read_content_core(Stream &strm, Request &req, Response &res,
 
 inline bool Server::handle_authorization(const Request &req) {
     auto b = true;
-    if (!basic_auth_username_.empty() || basic_auth_password_.empty()) {
+    if (!basic_auth_username_.empty() || !basic_auth_password_.empty()) {
         constexpr auto HEADER_AUTHORIZATION = "Authorization";
         constexpr auto BASIC = "Basic ";
         b = false;
