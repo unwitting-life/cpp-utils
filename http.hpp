@@ -229,16 +229,20 @@ namespace utils {
             inline CURLDATA get() {
                 CURLDATA params(this->m_uri);
                 auto session = curl_easy_init();
+                auto curl_code = CURLcode(CURL_LAST);
                 if (session) {
-                    curl_easy_setopt(session, CURLOPT_URL, this->m_uri.c_str());
+                    curl_code = curl_easy_setopt(session, CURLOPT_URL, this->m_uri.c_str());
                     this->setOptions(session);
-                    curl_easy_setopt(session, CURLOPT_NOPROGRESS, this->m_progress ? 0L : 1L);
-                    curl_easy_setopt(session, CURLOPT_HEADERFUNCTION, http::write_header);
-                    curl_easy_setopt(session, CURLOPT_HEADERDATA, &params);
-                    curl_easy_setopt(session, CURLOPT_WRITEFUNCTION, http::write_string);
-                    curl_easy_setopt(session, CURLOPT_WRITEDATA, &params);
-                    curl_easy_perform(session);
-                    curl_easy_getinfo(session, CURLINFO_RESPONSE_CODE, &params.status_code);
+                    curl_code = curl_easy_setopt(session, CURLOPT_NOPROGRESS, this->m_progress ? 0L : 1L);
+                    curl_code = curl_easy_setopt(session, CURLOPT_HEADERFUNCTION, http::write_header);
+                    curl_code = curl_easy_setopt(session, CURLOPT_HEADERDATA, &params);
+                    curl_code = curl_easy_setopt(session, CURLOPT_WRITEFUNCTION, http::write_string);
+                    curl_code = curl_easy_setopt(session, CURLOPT_WRITEDATA, &params);
+                    curl_code = curl_easy_perform(session);
+                    curl_code = curl_easy_getinfo(session, CURLINFO_RESPONSE_CODE, &params.status_code);
+                    if (curl_code != CURLE_OK) {
+                        OutputDebugString(utils::_format(L"http::session::get::curl_code = %d\n", curl_code).c_str());
+                    }
                     curl_easy_cleanup(session);
                 }
                 return params;
